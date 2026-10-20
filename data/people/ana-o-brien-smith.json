@@ -18,10 +18,10 @@
       "task": "Bad duration",
       "workItemType": "Feature",
       "description": "",
-      "start": "2026-10-01",
+      "start": "2026-10-09",
       "end": "",
       "durationWeeks": null,
-      "capacityImpact": "banana",
+      "capacityImpact": "medium",
       "utilisationPercent": 0,
       "complete": false,
       "milestones": {}
