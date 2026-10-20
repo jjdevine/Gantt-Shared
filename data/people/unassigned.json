@@ -1,0 +1,60 @@
+{
+  "tasks": [
+    {
+      "tasks": [
+        {
+          "person": "Priya",
+          "task": "Payments API v2",
+          "workItemType": "Feature",
+          "description": "Replace legacy checkout endpoint",
+          "start": "2026-10-05",
+          "end": "",
+          "durationWeeks": 10,
+          "capacityImpact": "high",
+          "utilisationPercent": 70,
+          "complete": false,
+          "milestones": {
+            "design signed off": "2026-10-23",
+            "beta": "2026-11-27"
+          }
+        },
+        {
+          "person": "Priya",
+          "task": "Dashboard load time",
+          "workItemType": "Improvement",
+          "description": "Cut p95 under 2s",
+          "start": "2026-11-02",
+          "end": "2026-12-11",
+          "capacityImpact": "medium",
+          "utilisationPercent": 30,
+          "complete": false,
+          "milestones": {
+            "profiling done": "2026-11-13"
+          }
+        },
+        {
+          "person": "Priya",
+          "task": "Q1 planning",
+          "workItemType": "Other",
+          "start": "",
+          "end": "",
+          "capacityImpact": "low",
+          "utilisationPercent": 10,
+          "complete": false,
+          "milestones": {}
+        },
+        {
+          "person": "Priya",
+          "task": "Onboarding docs",
+          "workItemType": "Improvement",
+          "start": "2026-08-03",
+          "end": "2026-09-11",
+          "capacityImpact": "low",
+          "utilisationPercent": 0,
+          "complete": true,
+          "milestones": {}
+        }
+      ]
+    }
+  ]
+}
