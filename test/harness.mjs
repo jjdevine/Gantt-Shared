@@ -128,6 +128,8 @@ console.log('\n[1] shared mode: load, save, refresh, conflicts, delete, read-onl
   check(errors.length === 0, 'no uncaught errors on load', errors);
   check($('syncArea').style.display !== 'none', 'sync UI shown');
   check($('resetBtn').style.display === 'none', 'Reset Example hidden in shared mode');
+  check($('jsonPanel').style.display === 'none', 'raw JSON panel hidden in shared mode');
+  check($('syncNowBtn').style.display !== 'none', 'Sync now visible in shared mode');
   check(status().startsWith('Synced'), 'status Synced after startup load', status());
   check(tasks().length === 2 && tasks().map(t => t.person).sort().join(',') === 'alice,bob', 'both people loaded from repo', tasks());
   check($('svg').querySelectorAll('rect').length > 0, 'chart rendered bars');
@@ -251,7 +253,7 @@ console.log('\n[3] local-only mode: no config.js');
   const page = loadPage({ gh, withConfig: false, token: '' });
   await sleep(150);
   check(page.$('syncArea').style.display === 'none', 'sync UI hidden');
-  check(page.$('syncNowBtn').style.display === 'none', 'Sync now hidden');
+  check(page.$('jsonPanel').style.display !== 'none', 'raw JSON panel visible');
   check(page.$('resetBtn').style.display !== 'none', 'Reset Example visible');
   check(page.$('json').value.includes('sales report'), 'default example loaded');
   check(gh.requests.length === 0, 'no network calls');
@@ -321,6 +323,58 @@ console.log('\n[6] dirty outbox flushed on next start-up');
   check(p2.status().startsWith('Synced'), 'status Synced after start-up flush', p2.status());
   check(p2.errors.length === 0, 'no uncaught errors', p2.errors);
   p2.w.close();
+}
+
+// ================= scenario 7: person import for someone not in the plan yet =================
+console.log('\n[7] person import creates a new person');
+{
+  const gh = new MockGitHub();
+  gh.set('data/people/alice.json', body([task('alice', 'alice task')]));
+  const page = loadPage({ gh });
+  const { $, tasks, visible, w } = page;
+  await sleep(150);
+  const prompts = [];
+  w.confirm = (m) => { prompts.push(m); return true; };
+
+  $('personImportExportBtn').click();
+  check(visible('personModal'), 'person modal opened');
+  check([...$('personNameList').options].map(o => o.value).join(',') === 'alice', 'suggestions list existing people', [...$('personNameList').options].map(o => o.value));
+
+  // export for an unknown person is an error, not an empty file
+  $('personName').value = 'Dana Lee';
+  $('personExportBtn').click();
+  check($('personError').textContent.includes('No tasks found'), 'export for unknown person reports an error', $('personError').textContent);
+
+  // import for an unknown person asks for confirmation, then creates them
+  $('personJsonArea').value = JSON.stringify([{ task: 'dana task 1', start: '2026-10-06', durationWeeks: 2 }, { task: 'dana task 2' }]);
+  $('personImportBtn').click();
+  check(prompts.length === 1 && prompts[0].includes('does not exist yet') && prompts[0].includes('2 tasks'), 'new-person confirm shown with task count', prompts);
+  check(!visible('personModal'), 'modal closed after import');
+  check(tasks().filter(t => t.person === 'Dana Lee').length === 2, 'two tasks now belong to Dana Lee', tasks());
+  check(tasks().filter(t => t.person === 'alice').length === 1, 'alice untouched', tasks());
+  await sleep(2600);
+  check(gh.files.has('data/people/dana-lee.json'), 'dana-lee.json committed', [...gh.files.keys()]);
+  check(JSON.parse(gh.files.get('data/people/dana-lee.json').content).tasks.length === 2, 'file holds both tasks');
+
+  // declining the confirm leaves everything alone
+  w.confirm = () => false;
+  $('personImportExportBtn').click();
+  $('personName').value = 'Nobody';
+  $('personJsonArea').value = '[{"task":"x"}]';
+  $('personImportBtn').click();
+  check(visible('personModal'), 'modal stays open when confirm declined');
+  check(!tasks().some(t => t.person === 'Nobody'), 'no tasks added when confirm declined');
+
+  // re-import for an existing person does not prompt and replaces
+  w.confirm = (m) => { prompts.push(m); return true; };
+  prompts.length = 0;
+  $('personName').value = 'Dana Lee';
+  $('personJsonArea').value = '{"tasks":[{"task":"dana only task"}]}';
+  $('personImportBtn').click();
+  check(prompts.length === 0, 'no new-person prompt for an existing person', prompts);
+  check(tasks().filter(t => t.person === 'Dana Lee').map(t => t.task).join() === 'dana only task', 'existing person tasks replaced', tasks());
+  check(page.errors.length === 0, 'no uncaught errors', page.errors);
+  w.close();
 }
 
 console.log('\n' + passes + ' passed, ' + failures + ' failed');

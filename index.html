@@ -301,6 +301,7 @@
       <span id="syncArea" style="display:none">
         <span id="syncStatus" class="sync-status" title="Click for details"></span>
         <button id="refreshBtn" title="Reload from the repository">Refresh</button>
+        <button id="syncNowBtn" title="Write pending changes to the repository now">Sync now</button>
         <button id="settingsBtn">Settings</button>
       </span>
       <button id="downloadBtnTop">Download JSON</button>
@@ -315,11 +316,10 @@
       <div id="chart" class="panel">
         <svg id="svg"></svg>
       </div>
-      <div class="panel">
+      <div id="jsonPanel" class="panel">
         <textarea id="json"></textarea>
         <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">
           <button id="saveBtn">Save & Render</button>
-          <button id="syncNowBtn" style="display:none" title="Write pending changes to the repository now">Sync now</button>
           <button id="resetBtn">Reset Example</button>
           <button id="downloadBtn">Download JSON</button>
           <button id="exportFilteredBtn">Export filtered</button>
@@ -460,16 +460,16 @@
       <form id="personForm">
         <div class="modal-row">
           <label for="personName">Person</label>
-          <select id="personName" required>
-            <option value="">Select a person...</option>
-          </select>
+          <input id="personName" type="text" list="personNameList" autocomplete="off"
+                 placeholder="Pick an existing person or type a new name" required />
+          <datalist id="personNameList"></datalist>
         </div>
         <div class="modal-row">
           <label for="personJsonArea">Tasks JSON</label>
           <textarea id="personJsonArea" spellcheck="false"></textarea>
           <div class="modal-note">
             Export produces: <code>{"tasks":[ ... ]}</code>. Import accepts either this object or a bare array of tasks.
-            All imported tasks are assigned to the specified person and replace any existing tasks for that person.
+            All imported tasks are assigned to the specified person and replace any existing tasks for that person. A name that is not in the plan yet creates a new person; you will be asked to confirm.
           </div>
         </div>
         <div id="personError"></div>
@@ -1473,13 +1473,12 @@
     const personCancelBtn = document.getElementById('personCancelBtn');
 
     function updatePersonSelect(){
-      const select = personNameInput;
-      select.innerHTML = '<option value="">Select a person...</option>';
+      const list = document.getElementById('personNameList');
+      list.innerHTML = '';
       getUniquePeople().forEach(p => {
         const opt = document.createElement('option');
         opt.value = p;
-        opt.textContent = p;
-        select.appendChild(opt);
+        list.appendChild(opt);
       });
     }
 
@@ -1518,6 +1517,10 @@
 
       const allTasks = Array.isArray(currentData.tasks) ? currentData.tasks : [];
       const tasksForPerson = allTasks.filter(t => (t.person || '') === person);
+      if(tasksForPerson.length === 0){
+        personError.textContent = `No tasks found for "${person}".`;
+        return;
+      }
 
       const exportObj = { tasks: tasksForPerson };
       personJsonArea.value = JSON.stringify(exportObj, null, 2);
@@ -1600,6 +1603,16 @@
           complete: !!t.complete,
           milestones: t.milestones || {}
         }));
+
+      const isNewPerson = !currentData.tasks.some(t => (t.person || '') === person);
+      if(isNewPerson){
+        const confirmed = confirm(
+          `"${person}" does not exist yet.\n\n` +
+          `Importing will create ${person} with ${cleaned.length} task${cleaned.length === 1 ? '' : 's'}.\n\n` +
+          `Check the spelling: a name that differs only in case or spacing becomes a separate person.\n\nContinue?`
+        );
+        if(!confirmed) return;
+      }
 
       // Remove existing tasks for this person
       currentData.tasks = currentData.tasks.filter(t => (t.person || '') !== person);
@@ -1973,6 +1986,7 @@
     const settingsBtn = document.getElementById('settingsBtn');
     const syncNowBtn = document.getElementById('syncNowBtn');
     const resetBtn = document.getElementById('resetBtn');
+    const jsonPanel = document.getElementById('jsonPanel');
 
     function setSync(status, detail){
       syncState.status = status; syncState.detail = detail || '';
@@ -2345,8 +2359,11 @@
         return;
       }
       syncArea.style.display = '';
-      syncNowBtn.style.display = '';
       resetBtn.style.display = 'none';   // would wipe the shared plan; not offered in shared mode
+      // The raw JSON editor is a local-mode tool; in shared mode every edit goes through the
+      // modals and persist(), so the panel is hidden. The textarea stays in the DOM as the
+      // in-memory mirror of currentData.
+      jsonPanel.style.display = 'none';
       textarea.value = saved ? saved : JSON.stringify({ tasks: [] }, null, 2);
       renderFromTextarea(true);
       if(!remoteMode()){
