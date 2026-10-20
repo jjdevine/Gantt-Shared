@@ -1,0 +1,2368 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>📝 Gantt Task Planner</title>
+<style>
+  :root{--panel-border:rgba(255,255,255,.25)}
+  body{
+    font-family:Inter,system-ui,-apple-system,'Segoe UI',Roboto,'Helvetica Neue',Arial;
+    margin:16px;color:#fff;
+    background:linear-gradient(135deg,#007a9b 0%,#004d8b 60%,#002b55 100%);
+    background-attachment:fixed;
+  }
+  h1{font-size:18px;margin:0 0 12px;color:#fff}
+ 
+  .top-bar{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    gap:12px;
+    margin-bottom:8px;
+  }
+  .controls{display:flex;gap:8px;align-items:center;color:#fff}
+  .top-buttons{
+    display:flex;
+    gap:8px;
+  }
+  button,select{
+    padding:8px 12px;border-radius:6px;border:1px solid #ddd;background:#f6f7f9;cursor:pointer;transition:background .2s;
+  }
+  button:hover,select:hover{background:#eef0f2}
+
+  #container{display:flex;gap:12px;align-items:stretch}
+  #left{flex:1;min-width:0}
+  #right{
+    width:280px;flex:0 0 280px;display:flex;flex-direction:column;gap:8px;
+  }
+  .panel{
+    border:1px solid var(--panel-border);border-radius:14px;padding:10px;
+    backdrop-filter:blur(8px);
+    background:
+      linear-gradient(180deg,rgba(255,255,255,.15) 0%,rgba(255,255,255,.05) 100%),
+      repeating-linear-gradient(45deg,rgba(255,255,255,.06) 0 1px,transparent 1px 10px);
+    box-shadow:0 4px 12px rgba(0,0,0,.4);
+  }
+  #chart{overflow:auto;margin-bottom:12px}
+  #svg{
+    width:100%;
+    display:block;
+  }
+  #toggles{max-height:400px;overflow:auto}
+  #toggles h3,#capacityPanel h3,#milestonePanel h3,#statusPanel h3{
+    margin:0 0 6px;font-size:14px;color:#fff;font-weight:800
+  }
+
+  /* rows inside right-hand panels */
+  #toggles .item,#capacityPanel .item,#milestonePanel .item,#statusPanel .item{
+    display:flex;align-items:center;gap:8px;padding:4px 2px;
+    border-bottom:1px dashed rgba(255,255,255,.12);
+  }
+  #toggles .item:last-child,#capacityPanel .item:last-child,#milestonePanel .item:last-child,#statusPanel .item:last-child{border-bottom:none}
+  #toggles label,#capacityPanel label,#milestonePanel label,#statusPanel label{
+    font-size:12px;line-height:1.2;cursor:pointer;flex:1
+  }
+
+  textarea{
+    width:100%;height:300px;font-family:monospace;font-size:13px;padding:8px;box-sizing:border-box;
+    border-radius:8px;border:1px solid:#ccc;
+  }
+  #msg{margin-top:8px;color:#f88}
+
+  .axis text{font-size:12px;fill:#fff}
+  .axis path,.axis line{stroke:#fff}
+  .person-label{font-size:16px;font-weight:800;fill:#fff;paint-order:stroke fill;stroke:#000;stroke-width:1.5}
+  .task-label{
+    font-size:14px;font-weight:700;fill:#fff;stroke:#111;stroke-width:1;paint-order:stroke fill;
+    cursor:pointer;
+  }
+
+  /* task rect styling */
+  .task-rect{
+    cursor:pointer;
+  }
+  .task-rect.impact-high{
+    stroke-width:3;
+    filter:drop-shadow(0 0 6px rgba(255,255,255,.8));
+  }
+  .task-rect.impact-low{
+    opacity:0.45;
+  }
+
+  .milestone{fill:#ffb347;stroke:#9c6300;stroke-width:1}
+  .milestone-text{font-size:12px;font-weight:700;fill:#fff;stroke:#000;stroke-width:2;paint-order:stroke fill}
+  .milestone-pin-stem{
+    stroke:#9c6300;
+    stroke-width:2;
+    stroke-linecap:round;
+  }
+
+  .gridline{stroke:rgba(255,255,255,.15)}
+  .today-line{stroke:#ff4d4f;stroke-width:1.4}
+
+  /* Overdue warning icon */
+  .overdue-icon{
+    font-size:16px;
+    fill:#ffd700;
+    stroke:#000;
+    stroke-width:1.5;
+    paint-order:stroke fill;
+    cursor:pointer;
+  }
+
+  /* Modal base */
+  .modal-backdrop{
+    position:fixed;
+    inset:0;
+    background:rgba(0,0,0,.7);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    z-index:1000;
+  }
+  .modal-hidden{display:none;}
+  .modal-panel{
+    background:#102030;
+    border-radius:12px;
+    padding:16px;
+    min-width:260px;
+    max-width:420px;
+    box-shadow:0 8px 24px rgba(0,0,0,.8);
+    border:1px solid rgba(255,255,255,.2);
+  }
+  .modal-panel h2{
+    margin:0 0 12px;
+    font-size:16px;
+    color:#fff;
+  }
+  .modal-row{
+    display:flex;
+    flex-direction:column;
+    margin-bottom:8px;
+    gap:4px;
+    font-size:13px;
+  }
+  .modal-row label{
+    font-weight:600;
+  }
+  .modal-row input,
+  .modal-row select,
+  .modal-row textarea{
+    padding:6px 8px;
+    border-radius:6px;
+    border:1px solid #ccc;
+    font-size:13px;
+    font-family:inherit;
+  }
+  .modal-row textarea{
+    min-height:140px;
+    resize:vertical;
+  }
+  .modal-row-inline{
+    display:flex;
+    flex-direction:row;
+    align-items:center;
+    margin-bottom:8px;
+    gap:8px;
+    font-size:13px;
+  }
+  .modal-row-inline label{
+    font-weight:600;
+    cursor:pointer;
+  }
+  #quickModal .modal-panel{
+    width:min(900px,94vw);
+    max-width:900px;
+    max-height:90vh;
+    overflow-y:auto;
+  }
+  #quickForm{
+    display:grid;
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    column-gap:12px;
+    row-gap:8px;
+  }
+  #quickForm .modal-row,
+  #quickForm .modal-row-inline{
+    margin-bottom:0;
+  }
+  #quickForm .modal-row-full,
+  #quickForm #quickError,
+  #quickForm .modal-actions{
+    grid-column:1 / -1;
+  }
+  #quickForm #qmDescription{
+    min-height:90px;
+    max-height:220px;
+  }
+  @media (max-width:700px){
+    #quickForm{
+      grid-template-columns:1fr;
+    }
+  }
+  .modal-actions{
+    display:flex;
+    justify-content:flex-end;
+    gap:8px;
+    margin-top:8px;
+  }
+  .btn-danger{
+    background:#d32f2f;
+    border-color:#b71c1c;
+    color:#fff;
+  }
+  .btn-danger:hover{
+    background:#b71c1c;
+  }
+  .modal-note{
+    font-size:11px;
+    color:#ddd;
+  }
+  .modal-actions-left{
+    margin-right:auto;
+    display:flex;
+    gap:8px;
+  }
+  #quickError,#personError,#exportFilteredError,#settingsError{
+    color:#f88;
+    font-size:12px;
+    min-height:16px;
+    margin-top:4px;
+  }
+  #settingsInfo{
+    color:#9f9;
+    font-size:12px;
+    min-height:16px;
+    margin-top:4px;
+    white-space:pre-line;
+  }
+
+  /* Shared-repository sync UI */
+  #syncArea{display:flex;gap:8px;align-items:center}
+  .sync-status{
+    font-size:12px;color:#fff;padding:7px 10px;border-radius:6px;
+    background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.25);
+    cursor:pointer;white-space:nowrap;user-select:none;
+  }
+  .sync-status.ok{background:rgba(46,160,67,.45)}
+  .sync-status.warn{background:rgba(255,170,0,.45)}
+  .sync-status.err{background:rgba(211,47,47,.6)}
+  #settingsModal .modal-panel{width:min(520px,94vw);max-width:520px}
+  #conflictModal .modal-panel{width:min(960px,94vw);max-width:960px;max-height:90vh;overflow-y:auto}
+  #conflictModal .conflict-cols{display:flex;gap:8px}
+  #conflictModal .conflict-cols .modal-row{flex:1;min-width:0}
+  #conflictModal textarea{min-height:260px;font-family:ui-monospace,Consolas,monospace;font-size:12px}
+
+  /* Milestone editor rows in task modal */
+  #milestoneList{
+    display:flex;
+    flex-direction:column;
+    gap:4px;
+  }
+  .milestone-row{
+    display:flex;
+    align-items:center;
+    gap:6px;
+  }
+  .milestone-row input[type="text"]{
+    flex:1;
+  }
+  .milestone-row input[type="date"]{
+    width:130px;
+  }
+  .ms-remove{
+    padding:4px 6px;
+    font-size:11px;
+    border-radius:4px;
+    border:1px solid #ccc;
+    background:#f6f7f9;
+    cursor:pointer;
+  }
+  .ms-remove:hover{
+    background:#eef0f2;
+  }
+</style>
+</head>
+<body>
+  <h1>Gantt (standalone) — editable JSON + Save</h1>
+
+  <div class="top-bar">
+    <div class="controls">
+      <label for="scale">Future window:</label>
+      <select id="scale">
+        <option value="3w">3 weeks</option>
+        <option value="3m" selected>3 months</option>
+        <option value="1y">1 year</option>
+      </select>
+      <button id="applyScale">Apply</button>
+    </div>
+    <div class="top-buttons">
+      <span id="syncArea" style="display:none">
+        <span id="syncStatus" class="sync-status" title="Click for details"></span>
+        <button id="refreshBtn" title="Reload from the repository">Refresh</button>
+        <button id="settingsBtn">Settings</button>
+      </span>
+      <button id="downloadBtnTop">Download JSON</button>
+      <button id="exportFilteredBtnTop">Export filtered</button>
+      <button id="personImportExportBtn">Person import/export</button>
+      <button id="quickAddBtn">Quick add task</button>
+    </div>
+  </div>
+
+  <div id="container">
+    <div id="left">
+      <div id="chart" class="panel">
+        <svg id="svg"></svg>
+      </div>
+      <div class="panel">
+        <textarea id="json"></textarea>
+        <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">
+          <button id="saveBtn">Save & Render</button>
+          <button id="syncNowBtn" style="display:none" title="Write pending changes to the repository now">Sync now</button>
+          <button id="resetBtn">Reset Example</button>
+          <button id="downloadBtn">Download JSON</button>
+          <button id="exportFilteredBtn">Export filtered</button>
+          <div id="msg" style="flex:1"></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="right">
+      <!-- capacityImpact filter panel -->
+      <div id="capacityPanel" class="panel">
+        <h3>Capacity impact</h3>
+        <div class="item">
+          <input type="checkbox" id="capHigh" checked />
+          <label for="capHigh">High</label>
+        </div>
+        <div class="item">
+          <input type="checkbox" id="capMedium" checked />
+          <label for="capMedium">Medium</label>
+        </div>
+        <div class="item">
+          <input type="checkbox" id="capLow" checked />
+          <label for="capLow">Low</label>
+        </div>
+      </div>
+
+      <!-- status filter panel -->
+      <div id="statusPanel" class="panel">
+        <h3>Status</h3>
+        <div class="item">
+          <input type="checkbox" id="hideCompleted" checked />
+          <label for="hideCompleted">Hide completed</label>
+        </div>
+        <div class="item">
+          <input type="checkbox" id="hideOverdue" />
+          <label for="hideOverdue">Hide overdue</label>
+        </div>
+      </div>
+
+      <!-- milestones visibility panel -->
+      <div id="milestonePanel" class="panel">
+        <h3>Milestones</h3>
+        <div class="item">
+          <input type="checkbox" id="showMilestones" checked />
+          <label for="showMilestones">Show milestones</label>
+        </div>
+      </div>
+
+      <!-- per-task toggles -->
+      <div id="toggles" class="panel">
+        <h3>Tasks shown</h3>
+        <div id="toggleList" role="group" aria-label="Toggle tasks"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Quick add / edit task modal -->
+  <div id="quickModal" class="modal-backdrop modal-hidden" aria-modal="true" role="dialog">
+    <div class="modal-panel">
+      <h2 id="quickModalTitle">Quick add task</h2>
+      <form id="quickForm">
+        <div class="modal-row">
+          <label for="qmPerson">Person</label>
+          <input id="qmPerson" type="text" list="personDatalist" required />
+          <datalist id="personDatalist"></datalist>
+        </div>
+        <div class="modal-row">
+          <label for="qmTask">Task</label>
+          <input id="qmTask" type="text" required />
+        </div>
+        <div class="modal-row">
+          <label for="qmWorkItemType">Work Item Type</label>
+          <select id="qmWorkItemType">
+            <option value="Feature">Feature</option>
+            <option value="Improvement">Improvement</option>
+            <option value="Other" selected>Other</option>
+          </select>
+        </div>
+        <div class="modal-row modal-row-full">
+          <label for="qmDescription">Description (optional)</label>
+          <textarea id="qmDescription"></textarea>
+        </div>
+        <div class="modal-row-inline">
+          <input id="qmNoStart" type="checkbox" />
+          <label for="qmNoStart">Unknown start date (floating)</label>
+        </div>
+        <div class="modal-row">
+          <label for="qmStart">Start date</label>
+          <input id="qmStart" type="date" required />
+        </div>
+        <div class="modal-row">
+          <label for="qmEnd">End date (optional)</label>
+          <input id="qmEnd" type="date" />
+        </div>
+        <div class="modal-row">
+          <label for="qmDurationWeeks">Duration (weeks, optional)</label>
+          <input id="qmDurationWeeks" type="number" min="0.1" step="0.1" />
+        </div>
+        <div class="modal-row">
+          <label for="qmImpact">Capacity impact</label>
+          <select id="qmImpact">
+            <option value="high">High</option>
+            <option value="medium" selected>Medium</option>
+            <option value="low">Low</option>
+          </select>
+        </div>
+        <div class="modal-row">
+          <label for="qmUtilisation">% Utilisation (optional)</label>
+          <input id="qmUtilisation" type="number" min="0" max="100" step="1" />
+        </div>
+        <div class="modal-row-inline">
+          <input id="qmComplete" type="checkbox" />
+          <label for="qmComplete">Complete</label>
+        </div>
+
+        <div class="modal-row modal-row-full">
+          <label>Milestones</label>
+          <div id="milestoneList"></div>
+          <button type="button" id="addMilestoneBtn">Add milestone</button>
+        </div>
+
+        <div id="quickError"></div>
+        <div class="modal-actions">
+          <div class="modal-actions-left">
+            <button type="button" id="quickDelete" class="btn-danger" hidden>Delete</button>
+          </div>
+          <button type="button" id="quickCancel">Cancel</button>
+          <button type="submit" id="quickSubmit">Add</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Person import/export modal -->
+  <div id="personModal" class="modal-backdrop modal-hidden" aria-modal="true" role="dialog">
+    <div class="modal-panel">
+      <h2>Person import/export</h2>
+      <form id="personForm">
+        <div class="modal-row">
+          <label for="personName">Person</label>
+          <select id="personName" required>
+            <option value="">Select a person...</option>
+          </select>
+        </div>
+        <div class="modal-row">
+          <label for="personJsonArea">Tasks JSON</label>
+          <textarea id="personJsonArea" spellcheck="false"></textarea>
+          <div class="modal-note">
+            Export produces: <code>{"tasks":[ ... ]}</code>. Import accepts either this object or a bare array of tasks.
+            All imported tasks are assigned to the specified person and replace any existing tasks for that person.
+          </div>
+        </div>
+        <div id="personError"></div>
+        <div class="modal-actions">
+          <div class="modal-actions-left">
+            <button type="button" id="personExportBtn">Export</button>
+            <button type="button" id="personImportBtn">Import &amp; replace</button>
+          </div>
+          <button type="button" id="personCancelBtn">Close</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Filtered export modal -->
+  <div id="exportFilteredModal" class="modal-backdrop modal-hidden" aria-modal="true" role="dialog">
+    <div class="modal-panel">
+      <h2>Export filtered JSON</h2>
+      <form id="exportFilteredForm">
+        <div class="modal-row">
+          <label for="efStartDate">Start date (include tasks starting on or after this date)</label>
+          <input id="efStartDate" type="date" />
+        </div>
+        <div class="modal-row">
+          <label for="efEndDate">End date (tasks must end before this date)</label>
+          <input id="efEndDate" type="date" />
+        </div>
+        <div class="modal-row-inline">
+          <input id="efIncludeUndated" type="checkbox" />
+          <label for="efIncludeUndated">Include undated tasks</label>
+        </div>
+        <div class="modal-row-inline">
+          <input id="efOnlyActiveUpcoming" type="checkbox" />
+          <label for="efOnlyActiveUpcoming">Only active or upcoming tasks (exclude completed / end date in past)</label>
+        </div>
+        <div id="exportFilteredError"></div>
+        <div class="modal-actions">
+          <button type="button" id="exportFilteredCancel">Cancel</button>
+          <button type="submit" id="exportFilteredSubmit">Download</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Settings modal: shared repository connection -->
+  <div id="settingsModal" class="modal-backdrop modal-hidden" aria-modal="true" role="dialog">
+    <div class="modal-panel">
+      <h2>Shared repository settings</h2>
+      <form id="settingsForm" autocomplete="off">
+        <div class="modal-row">
+          <label for="stApiBase">API base URL</label>
+          <input id="stApiBase" type="text" placeholder="https://api.github.com" />
+        </div>
+        <div class="modal-row-inline" style="gap:12px">
+          <div class="modal-row" style="flex:1;margin:0">
+            <label for="stOwner">Owner</label>
+            <input id="stOwner" type="text" />
+          </div>
+          <div class="modal-row" style="flex:1;margin:0">
+            <label for="stRepo">Repository</label>
+            <input id="stRepo" type="text" />
+          </div>
+        </div>
+        <div class="modal-row-inline" style="gap:12px">
+          <div class="modal-row" style="flex:1;margin:0">
+            <label for="stBranch">Branch</label>
+            <input id="stBranch" type="text" placeholder="main" />
+          </div>
+          <div class="modal-row" style="flex:1;margin:0">
+            <label for="stDataPath">Data path</label>
+            <input id="stDataPath" type="text" placeholder="data/people" />
+          </div>
+        </div>
+        <div class="modal-row">
+          <label for="stToken">Personal access token</label>
+          <input id="stToken" type="password" placeholder="github_pat_… or ghp_…" />
+          <div class="modal-note">
+            Stored only in this browser. Needs read and write access to the repository's contents.
+            Collaborators on a personally owned repository use a classic token with the <code>repo</code> scope.
+          </div>
+        </div>
+        <div id="settingsError"></div>
+        <div id="settingsInfo"></div>
+        <div class="modal-actions">
+          <div class="modal-actions-left">
+            <button type="button" id="settingsTestBtn">Test connection</button>
+            <button type="button" id="settingsForgetBtn" title="Remove the token from this browser">Forget token</button>
+          </div>
+          <button type="button" id="settingsCancelBtn">Cancel</button>
+          <button type="submit" id="settingsSaveBtn">Save &amp; reload</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Conflict resolution modal -->
+  <div id="conflictModal" class="modal-backdrop modal-hidden" aria-modal="true" role="dialog">
+    <div class="modal-panel">
+      <h2>Conflicting changes</h2>
+      <div class="modal-note" id="conflictIntro" style="margin-bottom:8px"></div>
+      <div class="conflict-cols">
+        <div class="modal-row">
+          <label for="conflictMine">Mine (this browser)</label>
+          <textarea id="conflictMine" readonly spellcheck="false"></textarea>
+        </div>
+        <div class="modal-row">
+          <label for="conflictTheirs">Theirs (repository)</label>
+          <textarea id="conflictTheirs" readonly spellcheck="false"></textarea>
+        </div>
+      </div>
+      <div class="modal-note">
+        <b>Keep theirs</b> discards your changes to this person and reloads the repository version.
+        <b>Keep mine</b> overwrites the repository version with yours.
+        <b>Decide later</b> leaves both as they are; your changes stay in this browser and nothing is written for this person until you choose.
+      </div>
+      <div class="modal-actions">
+        <div class="modal-actions-left">
+          <button type="button" id="conflictKeepTheirs">Keep theirs</button>
+          <button type="button" id="conflictKeepMine" class="btn-danger">Keep mine</button>
+        </div>
+        <button type="button" id="conflictLater">Decide later</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="d3.v7.min.js"></script>
+  <!-- Optional deployment config. Absent = local-only mode. -->
+  <script src="config.js"></script>
+  <script>
+  (function(){
+    const parseDate = d3.utcParse("%Y-%m-%d");
+    const formatDate = d3.utcFormat("%Y-%m-%d");
+
+    const svg = d3.select('#svg');
+    const margin = {top:36, right:24, bottom:44, left:90};
+    const barHeight=25, rowGap=5, groupGap=10, barRx=5;
+    const FADE_LEN=80, FADE_DIM=0.4;
+
+    const PIN_HEAD_RADIUS = 6;
+    const PIN_OVERHANG    = 22;
+
+    const FLOATING_OFFSET_DAYS = 14;
+    const FLOATING_DURATION_DAYS = 14;
+
+    const STORAGE_KEY='gantt_tasks_v1';
+    const textarea=document.getElementById('json');
+    const msg=document.getElementById('msg');
+    const toggleList = document.getElementById('toggleList');
+
+    const customPalette = ["#ff7f0e","#2ca02c","#d62728","#9467bd","#8c564b","#e377c2","#7f7f7f","#bcbd22","#17becf"];
+
+    const hiddenKeys = new Set();
+
+    let currentData = null;
+    let editIndex = null;
+
+    const capacityImpactState = { high: true, medium: true, low: true };
+    let showMilestones = true;
+    let hideCompleted = true;
+    let hideOverdue = false;
+
+    function normaliseImpact(val){
+      if(!val) return 'medium';
+      const v = String(val).toLowerCase();
+      if(v === 'high' || v === 'medium' || v === 'low') return v;
+      return 'medium';
+    }
+
+    function normaliseWorkItemType(val){
+      if(!val) return 'Other';
+      const v = String(val).trim().toLowerCase();
+      if(v === 'feature') return 'Feature';
+      if(v === 'improvement') return 'Improvement';
+      if(v === 'other') return 'Other';
+      return 'Other';
+    }
+
+    function parsePositiveNumber(val){
+      if(val === null || val === undefined) return null;
+      const s = String(val).trim();
+      if(!s) return null;
+      const n = Number(s);
+      if(!Number.isFinite(n) || n <= 0) return null;
+      return n;
+    }
+
+    function parseUtilisationPercent(val){
+      if(val === null || val === undefined) return null;
+      const s = String(val).trim();
+      if(!s) return null;
+      const n = Number(s);
+      if(!Number.isFinite(n)) return null;
+      return Math.max(0, Math.min(100, n));
+    }
+
+    function isImpactVisible(impact){
+      return capacityImpactState[impact] !== false;
+    }
+
+    // Sort tasks: person (case-insensitive), then capacity impact (high→medium→low), then end date, then task name
+    const impactOrder = { high: 0, medium: 1, low: 2 };
+    function sortTasksArray(tasks){
+      if(!Array.isArray(tasks)) return;
+      tasks.sort((a,b)=>{
+        const pa = (a.person || '').toLowerCase();
+        const pb = (b.person || '').toLowerCase();
+        if(pa !== pb) return pa.localeCompare(pb);
+
+        const ia = impactOrder[normaliseImpact(a.capacityImpact)];
+        const ib = impactOrder[normaliseImpact(b.capacityImpact)];
+        if(ia !== ib) return ia - ib;
+
+        const ea = a.end || '';
+        const eb = b.end || '';
+        if(ea !== eb) return ea.localeCompare(eb);
+
+        const ta = a.task || '';
+        const tb = b.task || '';
+        return ta.localeCompare(tb);
+      });
+    }
+
+    // capacityImpact filters
+    [
+      {id:'capHigh', impact:'high'},
+      {id:'capMedium', impact:'medium'},
+      {id:'capLow', impact:'low'}
+    ].forEach(({id,impact})=>{
+      const el = document.getElementById(id);
+      if(!el) return;
+      el.checked = capacityImpactState[impact];
+      el.addEventListener('change', () => {
+        capacityImpactState[impact] = el.checked;
+        renderFromTextarea(false);
+      });
+    });
+
+    // hide completed checkbox
+    const hideCompletedCheckbox = document.getElementById('hideCompleted');
+    if(hideCompletedCheckbox){
+      hideCompletedCheckbox.checked = hideCompleted;
+      hideCompletedCheckbox.addEventListener('change', () => {
+        hideCompleted = hideCompletedCheckbox.checked;
+        renderFromTextarea(false);
+      });
+    }
+
+    // hide overdue checkbox
+    const hideOverdueCheckbox = document.getElementById('hideOverdue');
+    if(hideOverdueCheckbox){
+      hideOverdueCheckbox.checked = hideOverdue;
+      hideOverdueCheckbox.addEventListener('change', () => {
+        hideOverdue = hideOverdueCheckbox.checked;
+        renderFromTextarea(false);
+      });
+    }
+
+    // milestones visibility checkbox
+    const showMilestonesCheckbox = document.getElementById('showMilestones');
+    if(showMilestonesCheckbox){
+      showMilestonesCheckbox.checked = showMilestones;
+      showMilestonesCheckbox.addEventListener('change', () => {
+        showMilestones = showMilestonesCheckbox.checked;
+        renderFromTextarea(false);
+      });
+    }
+
+    const defaultExample = JSON.stringify({
+      "tasks": [
+        {
+          "person": "bob",
+          "task": "sales report",
+          "workItemType": "Feature",
+          "start": "2025-03-01",
+          "end": "",
+          "durationWeeks": 8,
+          "capacityImpact": "high",
+          "utilisationPercent": 60,
+          "complete": false,
+          "milestones": {
+            "phase 1": "2025-05-01",
+            "phase 2": "2025-07-01"
+          }
+        },
+        {
+          "person": "bob",
+          "task": "customer demo",
+          "workItemType": "Improvement",
+          "start": "2025-04-01",
+          "end": "2025-06-01",
+          "capacityImpact": "medium",
+          "utilisationPercent": 40,
+          "complete": false,
+          "milestones": {
+            "contract signing": "2025-04-25"
+          }
+        },
+        {
+          "person": "bob",
+          "task": "future planning",
+          "workItemType": "Other",
+          "start": "",
+          "end": "",
+          "capacityImpact": "medium",
+          "utilisationPercent": 20,
+          "complete": false,
+          "milestones": {}
+        },
+        {
+          "person": "fred",
+          "task": "book event",
+          "workItemType": "Feature",
+          "start": "2025-05-01",
+          "end": "",
+          "capacityImpact": "low",
+          "utilisationPercent": 25,
+          "complete": false,
+          "milestones": {
+            "event occurs": "2025-06-24"
+          }
+        },
+        {
+          "person": "fred",
+          "task": "old finished task",
+          "workItemType": "Improvement",
+          "start": "2025-01-01",
+          "end": "2025-02-01",
+          "capacityImpact": "medium",
+          "utilisationPercent": 0,
+          "complete": true,
+          "milestones": {}
+        }
+      ]
+    }, null, 2);
+    // Initial textarea content and first render happen in initStorage() at the end of this script.
+
+    // Save & Render: parse, sort tasks, rewrite JSON, save, render
+    document.getElementById('saveBtn').onclick=()=>{
+      msg.textContent = '';
+      let data;
+      try{
+        data = JSON.parse(textarea.value);
+      }catch(e){
+        msg.textContent = 'Invalid JSON';
+        return;
+      }
+      if(!data.tasks || !Array.isArray(data.tasks)){
+        msg.textContent = 'Missing tasks array';
+        return;
+      }
+      sortTasksArray(data.tasks);
+      const pretty = JSON.stringify(data,null,2);
+      textarea.value = pretty;
+      persist(data);
+      renderFromTextarea(true);
+    };
+
+    document.getElementById('resetBtn').onclick=()=>{
+      localStorage.removeItem(STORAGE_KEY);
+      textarea.value=defaultExample;
+      hiddenKeys.clear();
+      renderFromTextarea(true);
+    };
+    function downloadJSON(){
+      downloadJsonString(textarea.value,'tasks');
+    }
+    document.getElementById('downloadBtn').onclick=downloadJSON;
+    document.getElementById('downloadBtnTop').onclick=downloadJSON;
+
+    new ResizeObserver(() => renderFromTextarea(false))
+      .observe(document.getElementById('chart'));
+
+    const scaleEl=document.getElementById('scale');
+    document.getElementById('applyScale').addEventListener('click',()=>renderFromTextarea(true));
+
+    function todayUTC(){
+      const d=new Date();
+      return new Date(Date.UTC(d.getUTCFullYear(),d.getUTCMonth(),d.getUTCDate()));
+    }
+
+    function getViewWindow(){
+      const t0=todayUTC();
+      let futureDays;
+      switch(scaleEl.value){
+        case'3w':futureDays=21;break;
+        case'1y':futureDays=365;break;
+        default:futureDays=91;
+      }
+      const pastDays=Math.max(7,Math.round(futureDays/3));
+      return{
+        start:d3.utcDay.offset(t0,-pastDays),
+        end:d3.utcDay.offset(t0,futureDays)
+      };
+    }
+
+    function keyFor(t){
+      return [t.person||'', t.task||'', t.start?formatDate(t.start):'', t.end?formatDate(t.end):''].join('||');
+    }
+
+    function renderFromTextarea(rebuildToggles){
+      msg.textContent='';
+      let data;
+      try{ data = JSON.parse(textarea.value); }
+      catch(e){
+        msg.textContent='Invalid JSON';
+        return;
+      }
+      if(!data.tasks||!Array.isArray(data.tasks)){
+        msg.textContent='Missing tasks array';
+        return;
+      }
+      currentData = data;
+      renderChart(data.tasks, rebuildToggles);
+    }
+
+    function renderChart(tasksRaw, rebuildTogglePanel){
+      const today = todayUTC();
+      const floatingStart = d3.utcDay.offset(today, FLOATING_OFFSET_DAYS);
+      const floatingEnd   = d3.utcDay.offset(today, FLOATING_OFFSET_DAYS + FLOATING_DURATION_DAYS);
+
+      const tasks=tasksRaw.map((t,i)=>{
+        const hasStart = !!(t.start && t.start.trim());
+        const startDate = hasStart ? parseDate(t.start) : null;
+        const durationWeeks = parsePositiveNumber(t.durationWeeks);
+        const explicitEnd = (t.end&&t.end.trim())?parseDate(t.end):null;
+        const endDate = (startDate && durationWeeks && !explicitEnd)
+          ? d3.utcDay.offset(startDate, Math.round(durationWeeks * 7))
+          : explicitEnd;
+        return {
+          id:i,
+          person:t.person||'—',
+          task:t.task||('task '+(i+1)),
+          start: startDate,
+          end:endDate,
+          capacityImpact: normaliseImpact(t.capacityImpact),
+          complete: !!t.complete,
+          durationWeeks: durationWeeks,
+          utilisationPercent: parseUtilisationPercent(t.utilisationPercent),
+          milestones:t.milestones||{},
+          description: typeof t.description === 'string' ? t.description : '',
+          hasDescription: !!(t.description && String(t.description).trim()),
+          floating: !hasStart
+        };
+      });
+
+      const {start:viewStart,end:viewEnd}=getViewWindow();
+
+      // Assign computed dates for floating tasks and default end dates
+      tasks.forEach(d=>{
+        if(d.floating){
+          d.start = floatingStart;
+          d.end = floatingEnd;
+        } else if(!d.end || isNaN(+d.end)){
+          d.end = viewEnd;
+        }
+      });
+
+      // Determine overdue: not complete, has a real end date (non-floating), end < today
+      tasks.forEach(d=>{
+        d.overdue = !d.complete && !d.floating && d.end && d.end < today;
+      });
+
+      const overlaps = (t) => (t.start <= viewEnd) && (t.end >= viewStart);
+
+      const people=[...new Set(tasks.map(d=>d.person))];
+      const colors=d3.scaleOrdinal().domain(people).range(customPalette);
+
+      const byPersonVisible = new Map();
+      const visibleTaskList = [];
+      people.forEach(p=>{
+        const vis = tasks.filter(t=>{
+          if(t.person!==p) return false;
+          if(!overlaps(t)) return false;
+          if(!isImpactVisible(t.capacityImpact)) return false;
+          if(hideCompleted && t.complete) return false;
+          if(hideOverdue && t.overdue) return false;
+          const k = keyFor(t);
+          if(hiddenKeys.has(k)) return false;
+          return true;
+        });
+
+        const visAll = tasks.filter(t=>t.person===p && overlaps(t) && !(hideCompleted && t.complete));
+        visAll.forEach(t=>visibleTaskList.push(t));
+
+        if (vis.length) byPersonVisible.set(p, vis);
+      });
+
+      if (rebuildTogglePanel) buildToggles(visibleTaskList);
+
+      const visiblePeople = Array.from(byPersonVisible.keys());
+
+      const width=Math.max(800,document.getElementById('chart').clientWidth-24);
+      if (visiblePeople.length === 0) {
+        svg.attr('viewBox',`0 0 ${width} 140`).attr('preserveAspectRatio','xMidYMid meet');
+        svg.selectAll('*').remove();
+        svg.append('text')
+          .attr('x', 12).attr('y', 28)
+          .attr('fill', '#fff').attr('font-size', 14)
+          .text('No tasks in the selected date range (or all hidden / filtered).');
+        return;
+      }
+
+      const groupsHeight = visiblePeople.reduce((s,p)=>{
+        const n = byPersonVisible.get(p).length;
+        return s + (n * (barHeight + rowGap)) + groupGap;
+      }, 0);
+
+      const height=margin.top+margin.bottom+groupsHeight;
+
+      svg
+        .attr('viewBox', `0 0 ${width} ${height}`)
+        .attr('preserveAspectRatio', 'none')
+        .attr('width', '100%')
+        .attr('height', height);
+      svg.selectAll('*').remove();
+
+      const x=d3.scaleUtc().domain([viewStart,viewEnd]).range([margin.left,width-margin.right]);
+      const plotX0=margin.left, plotX1=width-margin.right;
+      const defs=svg.append('defs');
+
+      defs.append('clipPath').attr('id','plot-clip')
+        .append('rect')
+          .attr('x',plotX0)
+          .attr('y',margin.top - PIN_OVERHANG)
+          .attr('width',plotX1-plotX0)
+          .attr('height',height-margin.bottom-margin.top + PIN_OVERHANG);
+
+      // Diagonal hatch pattern for floating (no start date) tasks
+      const hatch = defs.append('pattern')
+        .attr('id','hatch-floating')
+        .attr('patternUnits','userSpaceOnUse')
+        .attr('width',8)
+        .attr('height',8)
+        .attr('patternTransform','rotate(45)');
+      hatch.append('line')
+        .attr('x1',0).attr('y1',0)
+        .attr('x2',0).attr('y2',8)
+        .attr('stroke','rgba(255,255,255,0.35)')
+        .attr('stroke-width',2.5);
+
+      // Overdue stripe pattern (red diagonal lines)
+      const overdueHatch = defs.append('pattern')
+        .attr('id','hatch-overdue')
+        .attr('patternUnits','userSpaceOnUse')
+        .attr('width',10)
+        .attr('height',10)
+        .attr('patternTransform','rotate(-45)');
+      overdueHatch.append('line')
+        .attr('x1',0).attr('y1',0)
+        .attr('x2',0).attr('y2',10)
+        .attr('stroke','rgba(255,70,70,0.4)')
+        .attr('stroke-width',3);
+
+      const tickInterval = d3.utcDay.every(7);
+      const xAxis = d3.axisBottom(x)
+        .ticks(tickInterval)
+        .tickFormat(d3.utcFormat('%b %d'));
+
+      svg.append('g').selectAll('line').data(x.ticks(tickInterval)).enter().append('line')
+        .attr('x1',d=>x(d)).attr('x2',d=>x(d))
+        .attr('y1',margin.top-6).attr('y2',height-margin.bottom+6).attr('class','gridline');
+
+      const groupTop=new Map(); let cy=margin.top;
+      visiblePeople.forEach(p=>{
+        const rows = byPersonVisible.get(p).length;
+        groupTop.set(p,cy);
+        cy += rows*(barHeight+rowGap) + groupGap;
+      });
+
+      visiblePeople.forEach(p=>{
+        const rows = byPersonVisible.get(p).length;
+        const gH = rows*(barHeight+rowGap);
+        svg.append('text')
+          .attr('class','person-label')
+          .attr('x',12)
+          .attr('y',groupTop.get(p)+gH/2+5)
+          .text(p);
+      });
+
+      const taskG=svg.append('g').attr('clip-path','url(#plot-clip)');
+
+      function appendBarGradient(id,color,w,lfade,rfade){
+        const lf=Math.min(0.5,lfade/w||0),rf=Math.min(0.5,rfade/w||0);
+        const g=defs.append('linearGradient').attr('id',id).attr('x1','0%').attr('x2','100%');
+        const dim=FADE_DIM;
+        if(lf>0){
+          g.append('stop').attr('offset','0%').attr('stop-color',color).attr('stop-opacity',dim);
+          g.append('stop').attr('offset',lf*100+'%').attr('stop-color',color).attr('stop-opacity',1);
+        } else {
+          g.append('stop').attr('offset','0%').attr('stop-color',color).attr('stop-opacity',1);
+        }
+        if(rf>0){
+          g.append('stop').attr('offset',(100-rf*100)+'%').attr('stop-color',color).attr('stop-opacity',1);
+          g.append('stop').attr('offset','100%').attr('stop-color',color).attr('stop-opacity',dim);
+        } else {
+          g.append('stop').attr('offset','100%').attr('stop-color',color).attr('stop-opacity',1);
+        }
+      }
+
+      visiblePeople.forEach(p=>{
+        const list=byPersonVisible.get(p);
+        const color=colors(p);
+
+        list.forEach((t,i)=>{
+          const yTop=groupTop.get(p)+i*(barHeight+rowGap);
+          const startPx=x(t.start), endPx=x(t.end);
+          const dStart=Math.max(plotX0,Math.max(startPx,plotX0));
+          const dEnd=Math.min(plotX1,Math.min(endPx,plotX1));
+          const w=Math.max(0,dEnd-dStart); if(w<=0) return;
+
+          const truncL=t.start<viewStart||startPx<plotX0, truncR=t.end>viewEnd||endPx>plotX1;
+          const lf=truncL?Math.min(FADE_LEN,w/2):0, rf=truncR?Math.min(FADE_LEN,w/2):0;
+
+          const gradId=`g${t.id}_${i}`; appendBarGradient(gradId,color,w,lf,rf);
+
+          // Main bar rect
+          const barRect = taskG.append('rect')
+            .attr('x',dStart).attr('y',yTop)
+            .attr('width',w).attr('height',barHeight)
+            .attr('rx',barRx)
+            .attr('fill',`url(#${gradId})`)
+            .attr('stroke',d3.color(color).darker(0.8))
+            .attr('stroke-width',1)
+            .attr('class','task-rect impact-' + t.capacityImpact)
+            .on('click', () => openQuickModalForEdit(t.id));
+
+          // Floating task: overlay diagonal hatch + dashed stroke
+          if(t.floating){
+            barRect.attr('stroke-dasharray','6,3');
+
+            taskG.append('rect')
+              .attr('x',dStart).attr('y',yTop)
+              .attr('width',w).attr('height',barHeight)
+              .attr('rx',barRx)
+              .attr('fill','url(#hatch-floating)')
+              .attr('pointer-events','none');
+          }
+
+          // Overdue task: overlay red hatch + warning icon
+          if(t.overdue){
+            barRect
+              .attr('stroke','#ff4d4f')
+              .attr('stroke-width',2);
+
+            taskG.append('rect')
+              .attr('x',dStart).attr('y',yTop)
+              .attr('width',w).attr('height',barHeight)
+              .attr('rx',barRx)
+              .attr('fill','url(#hatch-overdue)')
+              .attr('pointer-events','none');
+
+            // Warning icon at the right edge of the bar
+            taskG.append('text')
+              .attr('x', Math.min(dEnd + 4, plotX1 - 4))
+              .attr('y', yTop + Math.round(barHeight * 0.72))
+              .attr('class','overdue-icon')
+              .attr('text-anchor', dEnd + 20 > plotX1 ? 'end' : 'start')
+              .text('⚠ overdue');
+          }
+
+          const labelText = `${t.task}${t.hasDescription ? ' 📝' : ''}${t.floating ? ' (no date)' : ''}`;
+          const taskLabel = taskG.append('text')
+            .attr('x',dStart+8)
+            .attr('y',yTop+Math.round(barHeight*0.68))
+            .attr('class','task-label')
+            .attr('text-anchor','start')
+            .attr('aria-label', t.hasDescription ? (t.task + ', has description') : t.task)
+            .text(labelText)
+            .on('click', () => openQuickModalForEdit(t.id));
+          if(t.hasDescription){
+            taskLabel.append('title').text('Has description');
+          }
+
+          if(showMilestones){
+            const milestonesArr = Object.entries(t.milestones||{})
+              .map(([k,v])=>({label:k, date: parseDate(v)}))
+              .filter(m => m.date && m.date>=viewStart && m.date<=viewEnd);
+
+            milestonesArr.forEach(m=>{
+              const mx = x(m.date);
+              if (mx < plotX0 || mx > plotX1) return;
+
+              const barTopY    = yTop;
+              const barCenterY = yTop + barHeight / 2;
+
+              const headCy = barTopY;
+              const stemY1 = headCy + PIN_HEAD_RADIUS * 0.2;
+              const stemY2 = barCenterY;
+
+              taskG.append('circle')
+                .attr('cx', mx)
+                .attr('cy', headCy)
+                .attr('r', PIN_HEAD_RADIUS)
+                .attr('class','milestone');
+
+              taskG.append('line')
+                .attr('x1', mx)
+                .attr('y1', stemY1)
+                .attr('x2', mx)
+                .attr('y2', stemY2)
+                .attr('class','milestone-pin-stem');
+
+              taskG.append('text')
+                .attr('x', mx + 10)
+                .attr('y', barTopY)
+                .attr('dominant-baseline', 'middle')
+                .attr('class','milestone-text')
+                .attr('text-anchor','start')
+                .text(m.label);
+            });
+          }
+        });
+      });
+
+      svg.append('g')
+        .attr('transform',`translate(0,${height-margin.bottom+6})`)
+        .attr('class','axis')
+        .call(xAxis)
+        .selectAll('text')
+        .attr('transform','rotate(-35)')
+        .style('text-anchor','end');
+
+      const t0=todayUTC();
+      if(t0>=viewStart&&t0<=viewEnd)
+        svg.append('line')
+          .attr('x1',x(t0)).attr('x2',x(t0))
+          .attr('y1',margin.top-6).attr('y2',height-margin.bottom+6)
+          .attr('class','today-line');
+    }
+
+    function buildToggles(visibleTaskList){
+      const seen = new Set();
+      const deduped = visibleTaskList
+        .slice()
+        .sort((a,b)=>{
+          if (a.person!==b.person) return a.person.localeCompare(b.person);
+          const ia = impactOrder[a.capacityImpact] ?? 1;
+          const ib = impactOrder[b.capacityImpact] ?? 1;
+          if (ia !== ib) return ia - ib;
+          const ea = a.end ? +a.end : 0, eb = b.end ? +b.end : 0;
+          if (ea !== eb) return ea - eb;
+          return (a.task||'').localeCompare(b.task||'');
+        })
+        .filter(t=>{
+          const k=keyFor(t);
+          if(seen.has(k)) return false;
+          seen.add(k); return true;
+        });
+
+      toggleList.innerHTML='';
+      deduped.forEach(t=>{
+        const k = keyFor(t);
+        const id = 'chk_' + btoa(k).replace(/=/g,'');
+        const row = document.createElement('div');
+        row.className = 'item';
+        const cb = document.createElement('input');
+        cb.type='checkbox'; cb.id=id; cb.checked = !hiddenKeys.has(k);
+        cb.addEventListener('change',()=>{
+          if(cb.checked) hiddenKeys.delete(k); else hiddenKeys.add(k);
+          renderFromTextarea(false);
+        });
+        const label = document.createElement('label');
+        label.setAttribute('for', id);
+        label.textContent = `${t.person} — ${t.task}`;
+        row.appendChild(cb); row.appendChild(label);
+        toggleList.appendChild(row);
+      });
+    }
+
+    // QUICK ADD / EDIT TASK MODAL
+
+    const quickModal = document.getElementById('quickModal');
+    const quickForm = document.getElementById('quickForm');
+    const quickError = document.getElementById('quickError');
+    const quickCancel = document.getElementById('quickCancel');
+    const quickAddBtn = document.getElementById('quickAddBtn');
+    const quickModalTitle = document.getElementById('quickModalTitle');
+    const quickSubmit = document.getElementById('quickSubmit');
+    const quickDelete = document.getElementById('quickDelete');
+
+    const qmPerson = document.getElementById('qmPerson');
+    const qmTask = document.getElementById('qmTask');
+    const qmWorkItemType = document.getElementById('qmWorkItemType');
+    const qmDescription = document.getElementById('qmDescription');
+    const qmStart = document.getElementById('qmStart');
+    const qmEnd = document.getElementById('qmEnd');
+    const qmDurationWeeks = document.getElementById('qmDurationWeeks');
+    const qmImpact = document.getElementById('qmImpact');
+    const qmUtilisation = document.getElementById('qmUtilisation');
+    const qmComplete = document.getElementById('qmComplete');
+    const qmNoStart = document.getElementById('qmNoStart');
+
+    function syncEndDurationInputs(changedField){
+      const hasEnd = !!qmEnd.value;
+      const durationValue = String(qmDurationWeeks.value || '').trim();
+      const hasDuration = !!durationValue;
+      if(changedField === 'end' && hasEnd){
+        qmDurationWeeks.value = '';
+      }
+      if(changedField === 'duration' && hasDuration){
+        qmEnd.value = '';
+      }
+      qmDurationWeeks.disabled = !!qmEnd.value;
+      qmEnd.disabled = !!String(qmDurationWeeks.value || '').trim();
+    }
+
+    // Toggle start date enabled/disabled based on "unknown start" checkbox
+    qmNoStart.addEventListener('change', () => {
+      if(qmNoStart.checked){
+        qmStart.value = '';
+        qmStart.disabled = true;
+        qmStart.required = false;
+      } else {
+        qmStart.disabled = false;
+        qmStart.required = true;
+      }
+    });
+    qmEnd.addEventListener('input', () => syncEndDurationInputs('end'));
+    qmDurationWeeks.addEventListener('input', () => syncEndDurationInputs('duration'));
+
+    const milestoneList = document.getElementById('milestoneList');
+    const addMilestoneBtn = document.getElementById('addMilestoneBtn');
+
+    function clearMilestoneRows(){
+      milestoneList.innerHTML = '';
+    }
+
+    function addMilestoneRow(label = '', date = ''){
+      const row = document.createElement('div');
+      row.className = 'milestone-row';
+
+      const labelInput = document.createElement('input');
+      labelInput.type = 'text';
+      labelInput.placeholder = 'Label';
+      labelInput.value = label;
+      labelInput.className = 'ms-label';
+
+      const dateInput = document.createElement('input');
+      dateInput.type = 'date';
+      dateInput.value = date;
+      dateInput.className = 'ms-date';
+
+      const removeBtn = document.createElement('button');
+      removeBtn.type = 'button';
+      removeBtn.textContent = '×';
+      removeBtn.className = 'ms-remove';
+      removeBtn.addEventListener('click', () => {
+        milestoneList.removeChild(row);
+      });
+
+      row.appendChild(labelInput);
+      row.appendChild(dateInput);
+      row.appendChild(removeBtn);
+      milestoneList.appendChild(row);
+    }
+
+    addMilestoneBtn.addEventListener('click', () => {
+      addMilestoneRow();
+    });
+
+    function getUniquePeople(){
+      if(!currentData || !Array.isArray(currentData.tasks)) return [];
+      const set = new Set();
+      currentData.tasks.forEach(t => { if(t.person) set.add(t.person); });
+      return Array.from(set).sort((a,b)=>a.toLowerCase().localeCompare(b.toLowerCase()));
+    }
+
+    function updatePersonDatalist(){
+      const datalist = document.getElementById('personDatalist');
+      datalist.innerHTML = '';
+      getUniquePeople().forEach(p => {
+        const opt = document.createElement('option');
+        opt.value = p;
+        datalist.appendChild(opt);
+      });
+    }
+
+    function openQuickModalForAdd(){
+      editIndex = null;
+      quickError.textContent = '';
+      quickModalTitle.textContent = 'Quick add task';
+      quickSubmit.textContent = 'Add';
+      quickDelete.hidden = true;
+
+      const d = new Date();
+      const yyyy = d.getFullYear();
+      const mm = String(d.getMonth()+1).padStart(2,'0');
+      const dd = String(d.getDate()).padStart(2,'0');
+      qmNoStart.checked = false;
+      qmStart.disabled = false;
+      qmStart.required = true;
+      qmStart.value = `${yyyy}-${mm}-${dd}`;
+      qmEnd.value = '';
+      qmDurationWeeks.value = '';
+      qmImpact.value = 'medium';
+      qmUtilisation.value = '';
+      qmComplete.checked = false;
+      qmPerson.value = '';
+      qmTask.value = '';
+      qmWorkItemType.value = 'Other';
+      qmDescription.value = '';
+      syncEndDurationInputs();
+
+      clearMilestoneRows();
+      addMilestoneRow();
+
+      updatePersonDatalist();
+      quickModal.classList.remove('modal-hidden');
+      qmPerson.focus();
+    }
+
+    function openQuickModalForEdit(idx){
+      if(!currentData || !currentData.tasks || !currentData.tasks[idx]) return;
+      editIndex = idx;
+      quickError.textContent = '';
+      quickModalTitle.textContent = 'Edit task';
+      quickSubmit.textContent = 'Update';
+      quickDelete.hidden = false;
+
+      const t = currentData.tasks[idx];
+
+      qmPerson.value = t.person || '';
+      qmTask.value = t.task || '';
+      qmWorkItemType.value = normaliseWorkItemType(t.workItemType);
+      qmDescription.value = t.description || '';
+      const hasStart = !!(t.start && t.start.trim());
+      qmNoStart.checked = !hasStart;
+      qmStart.disabled = !hasStart;
+      qmStart.required = hasStart;
+      qmStart.value = hasStart ? t.start.slice(0,10) : '';
+      qmEnd.value = t.end ? t.end.slice(0,10) : '';
+      qmDurationWeeks.value = parsePositiveNumber(t.durationWeeks) || '';
+      qmImpact.value = normaliseImpact(t.capacityImpact);
+      qmUtilisation.value = parseUtilisationPercent(t.utilisationPercent) ?? '';
+      qmComplete.checked = !!t.complete;
+      syncEndDurationInputs();
+
+      clearMilestoneRows();
+      const ms = t.milestones || {};
+      const entries = Object.entries(ms);
+      if(entries.length){
+        entries.forEach(([label, date]) => {
+          addMilestoneRow(label, (date || '').slice(0,10));
+        });
+      } else {
+        addMilestoneRow();
+      }
+
+      updatePersonDatalist();
+      quickModal.classList.remove('modal-hidden');
+      qmPerson.focus();
+    }
+
+    function closeQuickModal(){
+      quickModal.classList.add('modal-hidden');
+    }
+
+    quickAddBtn.addEventListener('click', openQuickModalForAdd);
+    quickCancel.addEventListener('click', closeQuickModal);
+    quickDelete.addEventListener('click', () => {
+      quickError.textContent = '';
+
+      if(!currentData){
+        try{
+          currentData = textarea.value ? JSON.parse(textarea.value) : {tasks:[]};
+        }catch(err){
+          quickError.textContent = 'Current JSON is invalid. Fix it before deleting tasks.';
+          return;
+        }
+      }
+      if(!Array.isArray(currentData.tasks)){
+        currentData.tasks = [];
+      }
+      if(editIndex === null || !currentData.tasks[editIndex]) return;
+
+      const target = currentData.tasks[editIndex];
+      const targetLabel = (target.task || '').trim() || 'Untitled task';
+      const confirmed = confirm(`Delete "${targetLabel}"? This cannot be undone.`);
+      if(!confirmed) return;
+
+      currentData.tasks.splice(editIndex, 1);
+      sortTasksArray(currentData.tasks);
+
+      const pretty = JSON.stringify(currentData,null,2);
+      textarea.value = pretty;
+      persist(currentData);
+
+      closeQuickModal();
+      renderFromTextarea(true);
+    });
+
+    // PERSON IMPORT/EXPORT MODAL
+
+    const personModal = document.getElementById('personModal');
+    const personImportExportBtn = document.getElementById('personImportExportBtn');
+    const personNameInput = document.getElementById('personName');
+    const personJsonArea = document.getElementById('personJsonArea');
+    const personError = document.getElementById('personError');
+    const personExportBtn = document.getElementById('personExportBtn');
+    const personImportBtn = document.getElementById('personImportBtn');
+    const personCancelBtn = document.getElementById('personCancelBtn');
+
+    function updatePersonSelect(){
+      const select = personNameInput;
+      select.innerHTML = '<option value="">Select a person...</option>';
+      getUniquePeople().forEach(p => {
+        const opt = document.createElement('option');
+        opt.value = p;
+        opt.textContent = p;
+        select.appendChild(opt);
+      });
+    }
+
+    function openPersonModal(){
+      personError.textContent = '';
+      personJsonArea.value = '';
+      updatePersonSelect();
+      personNameInput.value = '';
+      personModal.classList.remove('modal-hidden');
+      personNameInput.focus();
+    }
+
+    function closePersonModal(){
+      personModal.classList.add('modal-hidden');
+    }
+
+    personImportExportBtn.addEventListener('click', openPersonModal);
+    personCancelBtn.addEventListener('click', closePersonModal);
+
+    personExportBtn.addEventListener('click', () => {
+      personError.textContent = '';
+      const person = personNameInput.value.trim();
+      if(!person){
+        personError.textContent = 'Person name is required for export.';
+        return;
+      }
+
+      if(!currentData){
+        try{
+          currentData = textarea.value ? JSON.parse(textarea.value) : {tasks:[]};
+        }catch(err){
+          personError.textContent = 'Current JSON is invalid.';
+          return;
+        }
+      }
+
+      const allTasks = Array.isArray(currentData.tasks) ? currentData.tasks : [];
+      const tasksForPerson = allTasks.filter(t => (t.person || '') === person);
+
+      const exportObj = { tasks: tasksForPerson };
+      personJsonArea.value = JSON.stringify(exportObj, null, 2);
+    });
+
+    personImportBtn.addEventListener('click', () => {
+      personError.textContent = '';
+      const person = personNameInput.value.trim();
+      if(!person){
+        personError.textContent = 'Person name is required for import.';
+        return;
+      }
+
+      const raw = personJsonArea.value.trim();
+      if(!raw){
+        personError.textContent = 'Paste JSON to import.';
+        return;
+      }
+
+      let parsed;
+      try{
+        parsed = JSON.parse(raw);
+      }catch(e){
+        personError.textContent = 'Invalid JSON in tasks area.';
+        return;
+      }
+
+      let incomingTasks;
+      if(Array.isArray(parsed)){
+        incomingTasks = parsed;
+      }else if(parsed && Array.isArray(parsed.tasks)){
+        incomingTasks = parsed.tasks;
+      }else{
+        personError.textContent = 'JSON must be an array or an object with a "tasks" array.';
+        return;
+      }
+
+      // Check if imported tasks have different person names
+      const otherPersons = new Set();
+      incomingTasks.forEach(t => {
+        if(t && t.person && t.person !== person){
+          otherPersons.add(t.person);
+        }
+      });
+      if(otherPersons.size > 0){
+        const names = Array.from(otherPersons).join(', ');
+        const confirmed = confirm(
+          `Warning: The imported data contains tasks for "${names}" but you selected "${person}".\n\n` +
+          `All imported tasks will be reassigned to "${person}" and will replace ${person}'s existing tasks.\n\n` +
+          `Continue?`
+        );
+        if(!confirmed) return;
+      }
+
+      if(!currentData){
+        try{
+          currentData = textarea.value ? JSON.parse(textarea.value) : {tasks:[]};
+        }catch(err){
+          personError.textContent = 'Current JSON is invalid.';
+          return;
+        }
+      }
+      if(!Array.isArray(currentData.tasks)){
+        currentData.tasks = [];
+      }
+
+      // Normalise imported tasks and assign person
+      const cleaned = incomingTasks
+        .filter(t => t && typeof t === 'object')
+        .map(t => ({
+          person: person,
+          task: t.task || '',
+          workItemType: normaliseWorkItemType(t.workItemType),
+          description: t.description || '',
+          start: t.start || '',
+          end: t.end || '',
+          durationWeeks: parsePositiveNumber(t.durationWeeks),
+          capacityImpact: t.capacityImpact || 'medium',
+          utilisationPercent: parseUtilisationPercent(t.utilisationPercent),
+          complete: !!t.complete,
+          milestones: t.milestones || {}
+        }));
+
+      // Remove existing tasks for this person
+      currentData.tasks = currentData.tasks.filter(t => (t.person || '') !== person);
+      // Add imported
+      currentData.tasks.push(...cleaned);
+
+      // Sort and persist
+      sortTasksArray(currentData.tasks);
+      const pretty = JSON.stringify(currentData,null,2);
+      textarea.value = pretty;
+      persist(currentData);
+
+      closePersonModal();
+      renderFromTextarea(true);
+    });
+
+    // GLOBAL ESC KEY: close whichever modal is open
+    document.addEventListener('keydown', (e)=>{
+      if(e.key === 'Escape'){
+        if(!quickModal.classList.contains('modal-hidden')){
+          closeQuickModal();
+        }else if(!personModal.classList.contains('modal-hidden')){
+          closePersonModal();
+        }else if(!exportFilteredModal.classList.contains('modal-hidden')){
+          closeExportFilteredModal();
+        }else if(!settingsModal.classList.contains('modal-hidden')){
+          closeSettingsModal();
+        }else if(!conflictModal.classList.contains('modal-hidden')){
+          closeConflictModal();
+        }
+      }
+    });
+
+    // Close modals when clicking their backdrop
+    quickModal.addEventListener('click', (e)=>{
+      if(e.target === quickModal){
+        closeQuickModal();
+      }
+    });
+    personModal.addEventListener('click', (e)=>{
+      if(e.target === personModal){
+        closePersonModal();
+      }
+    });
+
+    // Task modal submit (add/edit)
+    quickForm.addEventListener('submit', (e)=>{
+      e.preventDefault();
+      quickError.textContent = '';
+
+      const person = qmPerson.value.trim();
+      const task = qmTask.value.trim();
+      const workItemType = normaliseWorkItemType(qmWorkItemType.value);
+      const description = qmDescription.value.trim();
+      const noStart = qmNoStart.checked;
+      const start = noStart ? '' : qmStart.value;
+      const end = qmEnd.value;
+      const durationWeeks = parsePositiveNumber(qmDurationWeeks.value);
+      const impact = qmImpact.value || 'medium';
+      const utilisationPercent = parseUtilisationPercent(qmUtilisation.value);
+      const complete = qmComplete.checked;
+
+      if(!person || !task){
+        quickError.textContent = 'Person and task are required.';
+        return;
+      }
+      if(!noStart && !start){
+        quickError.textContent = 'Start date is required (or tick unknown start date).';
+        return;
+      }
+      if(end && durationWeeks){
+        quickError.textContent = 'Use either End date or Duration (weeks), not both.';
+        return;
+      }
+
+      if(!currentData){
+        try{
+          currentData = textarea.value ? JSON.parse(textarea.value) : {tasks:[]};
+        }catch(err){
+          quickError.textContent = 'Current JSON is invalid. Fix it before adding tasks.';
+          return;
+        }
+      }
+      if(!currentData.tasks || !Array.isArray(currentData.tasks)){
+        currentData.tasks = [];
+      }
+
+      const milestones = {};
+      milestoneList.querySelectorAll('.milestone-row').forEach(row => {
+        const labelInput = row.querySelector('.ms-label');
+        const dateInput  = row.querySelector('.ms-date');
+        if(!labelInput || !dateInput) return;
+        const label = labelInput.value.trim();
+        const date = dateInput.value;
+        if(label && date){
+          milestones[label] = date;
+        }
+      });
+
+      const newTask = {
+        person: person,
+        task: task,
+        workItemType: workItemType,
+        description: description,
+        start: start || "",
+        end: end || "",
+        durationWeeks: durationWeeks,
+        capacityImpact: impact,
+        utilisationPercent: utilisationPercent,
+        complete: complete,
+        milestones: milestones
+      };
+
+      if(editIndex === null){
+        currentData.tasks.push(newTask);
+      } else if(currentData.tasks[editIndex]){
+        const t = currentData.tasks[editIndex];
+        t.person = person;
+        t.task = task;
+        t.workItemType = workItemType;
+        t.description = description;
+        t.start = start || "";
+        t.end = end || "";
+        t.durationWeeks = durationWeeks;
+        t.capacityImpact = impact;
+        t.utilisationPercent = utilisationPercent;
+        t.complete = complete;
+        t.milestones = milestones;
+      } else {
+        currentData.tasks.push(newTask);
+      }
+
+      // sort tasks before writing JSON so persons stay grouped
+      sortTasksArray(currentData.tasks);
+
+      const pretty = JSON.stringify(currentData,null,2);
+      textarea.value = pretty;
+      persist(currentData);
+
+      closeQuickModal();
+      renderFromTextarea(true);
+    });
+
+    // FILTERED EXPORT MODAL
+    const exportFilteredModal = document.getElementById('exportFilteredModal');
+    const exportFilteredForm = document.getElementById('exportFilteredForm');
+    const exportFilteredBtn = document.getElementById('exportFilteredBtn');
+    const exportFilteredBtnTop = document.getElementById('exportFilteredBtnTop');
+    const exportFilteredCancel = document.getElementById('exportFilteredCancel');
+    const exportFilteredError = document.getElementById('exportFilteredError');
+    const efStartDate = document.getElementById('efStartDate');
+    const efEndDate = document.getElementById('efEndDate');
+    const efIncludeUndated = document.getElementById('efIncludeUndated');
+    const efOnlyActiveUpcoming = document.getElementById('efOnlyActiveUpcoming');
+
+    function openExportFilteredModal(){
+      exportFilteredError.textContent = '';
+      efStartDate.value = '';
+      efEndDate.value = '';
+      efIncludeUndated.checked = false;
+      efOnlyActiveUpcoming.checked = false;
+      exportFilteredModal.classList.remove('modal-hidden');
+      efStartDate.focus();
+    }
+
+    function closeExportFilteredModal(){
+      exportFilteredModal.classList.add('modal-hidden');
+    }
+
+    function downloadJsonString(jsonText, filePrefix){
+      const blob = new Blob([jsonText], {type:'application/json'});
+      const url = URL.createObjectURL(blob);
+      const now = new Date();
+      const ts = now.getFullYear()+'-'+
+        String(now.getMonth()+1).padStart(2,'0')+'-'+
+        String(now.getDate()).padStart(2,'0')+'-'+
+        String(now.getHours()).padStart(2,'0')+'-'+
+        String(now.getMinutes()).padStart(2,'0');
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filePrefix + '-' + ts + '.json';
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    function taskMatchesFilteredExport(task, minStartDate, maxEndDate, includeUndated, onlyActiveUpcoming, todayDate){
+      const start = task && typeof task.start === 'string' ? task.start.trim() : '';
+      const rawEnd = task && typeof task.end === 'string' ? task.end.trim() : '';
+      const durationWeeks = parsePositiveNumber(task && task.durationWeeks);
+      let end = rawEnd;
+      if(!end && start && durationWeeks){
+        const computedStart = parseDate(start);
+        if(computedStart){
+          end = formatDate(d3.utcDay.offset(computedStart, Math.round(durationWeeks * 7)));
+        }
+      }
+
+      if(minStartDate){
+        if(!start){
+          if(!includeUndated) return false;
+        }else if(start < minStartDate){
+          return false;
+        }
+      }
+
+      if(maxEndDate){
+        if(!end){
+          if(!includeUndated) return false;
+        }else if(end >= maxEndDate){
+          return false;
+        }
+      }
+
+      if(onlyActiveUpcoming){
+        if(task && task.complete) return false;
+        if(end && end < todayDate) return false;
+      }
+
+      return true;
+    }
+
+    if(exportFilteredBtn) exportFilteredBtn.addEventListener('click', openExportFilteredModal);
+    if(exportFilteredBtnTop) exportFilteredBtnTop.addEventListener('click', openExportFilteredModal);
+    exportFilteredCancel.addEventListener('click', closeExportFilteredModal);
+    exportFilteredModal.addEventListener('click', (e)=>{
+      if(e.target === exportFilteredModal){
+        closeExportFilteredModal();
+      }
+    });
+
+    exportFilteredForm.addEventListener('submit', (e)=>{
+      e.preventDefault();
+      exportFilteredError.textContent = '';
+
+      let data;
+      try{
+        data = textarea.value ? JSON.parse(textarea.value) : {tasks:[]};
+      }catch(err){
+        exportFilteredError.textContent = 'Current JSON is invalid.';
+        return;
+      }
+      if(!data.tasks || !Array.isArray(data.tasks)){
+        exportFilteredError.textContent = 'Missing tasks array.';
+        return;
+      }
+
+      const minStartDate = efStartDate.value;
+      const maxEndDate = efEndDate.value;
+      const includeUndated = efIncludeUndated.checked;
+      const onlyActiveUpcoming = efOnlyActiveUpcoming.checked;
+      const todayDate = onlyActiveUpcoming ? formatDate(todayUTC()) : '';
+      const filteredTasks = data.tasks.filter(t => taskMatchesFilteredExport(t, minStartDate, maxEndDate, includeUndated, onlyActiveUpcoming, todayDate));
+      const exportData = Object.assign({}, data, { tasks: filteredTasks });
+      downloadJsonString(JSON.stringify(exportData, null, 2), 'tasks-filtered');
+      closeExportFilteredModal();
+    });
+
+    // =====================================================================
+    // SHARED STORAGE: GitHub repository as the source of truth
+    //
+    // With no repository configured (no config.js and no saved settings)
+    // everything below is inert and the app behaves exactly as before:
+    // localStorage is the store. With a repository configured and a token
+    // saved, localStorage becomes a cache plus an outbox, and every save is
+    // a commit of data/people/<person>.json via the Contents API.
+    // =====================================================================
+
+    const SETTINGS_KEY  = 'gantt_repo_settings_v1';
+    const TOKEN_KEY     = 'gantt_github_token_v1';
+    const SNAPSHOT_KEY  = 'gantt_repo_snapshot_v1';
+    const DIRTY_KEY     = 'gantt_repo_dirty_v1';
+    const INIT_KEY      = 'gantt_repo_initialised_v1';
+    const POLL_MS       = 5 * 60 * 1000;
+    const WRITE_DEBOUNCE_MS = 2000;
+
+    const fileConfig = (typeof window.GANTT_CONFIG === 'object' && window.GANTT_CONFIG) ? window.GANTT_CONFIG : null;
+
+    function readJSON(key, fallback){
+      try{ const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; }
+      catch(e){ return fallback; }
+    }
+    function getRepoSettings(){
+      const cfg = Object.assign(
+        { apiBase:'https://api.github.com', owner:'', repo:'', branch:'main', dataPath:'data/people' },
+        fileConfig || {},
+        readJSON(SETTINGS_KEY, {})
+      );
+      cfg.apiBase  = String(cfg.apiBase || '').trim().replace(/\/+$/,'');
+      cfg.owner    = String(cfg.owner || '').trim();
+      cfg.repo     = String(cfg.repo || '').trim();
+      cfg.branch   = String(cfg.branch || 'main').trim() || 'main';
+      cfg.dataPath = String(cfg.dataPath || '').trim().replace(/^\/+|\/+$/g,'');
+      return cfg;
+    }
+    function getToken(){ return localStorage.getItem(TOKEN_KEY) || ''; }
+    function repoConfigured(cfg){ cfg = cfg || getRepoSettings(); return !!(cfg.apiBase && cfg.owner && cfg.repo); }
+    function remoteMode(){ return repoConfigured() && !!getToken(); }
+
+    const enc = encodeURIComponent;
+    function b64(str){
+      const bytes = new TextEncoder().encode(str);
+      let bin = ''; bytes.forEach(b => { bin += String.fromCharCode(b); });
+      return btoa(bin);
+    }
+    function unb64(s){
+      const bin = atob(String(s || '').replace(/\s/g,''));
+      return new TextDecoder().decode(Uint8Array.from(bin, c => c.charCodeAt(0)));
+    }
+    function personSlug(person){
+      const s = String(person || '').trim().toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'');
+      return s || 'unassigned';
+    }
+    function timeNow(){
+      return new Date().toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' });
+    }
+
+    class ApiError extends Error {
+      constructor(status, message, headers){ super(message); this.status = status; this.headers = headers; }
+    }
+    // opts: method, body (object), headers, raw (return text), cfg/token overrides, keepalive
+    async function api(path, opts){
+      opts = opts || {};
+      const cfg = opts.cfg || getRepoSettings();
+      const token = (opts.token !== undefined) ? opts.token : getToken();
+      const headers = Object.assign({ 'Accept': 'application/vnd.github+json' }, opts.headers || {});
+      if(token) headers['Authorization'] = 'Bearer ' + token;
+      if(opts.body) headers['Content-Type'] = 'application/json';
+      let res;
+      try{
+        res = await fetch(cfg.apiBase + path, {
+          method: opts.method || 'GET',
+          headers,
+          body: opts.body ? JSON.stringify(opts.body) : undefined,
+          cache: 'no-store',
+          keepalive: !!opts.keepalive
+        });
+      }catch(e){
+        throw new ApiError(0, 'Network error: ' + (e && e.message ? e.message : e), null);
+      }
+      if(res.status === 304) return { status: 304, headers: res.headers, body: null };
+      const text = await res.text();
+      let body = text;
+      if(!opts.raw){ try{ body = text ? JSON.parse(text) : null; }catch(e){ body = text; } }
+      if(!res.ok){
+        const m = (body && typeof body === 'object' && body.message) ? body.message : (res.statusText || ('HTTP ' + res.status));
+        throw new ApiError(res.status, m, res.headers);
+      }
+      return { status: res.status, headers: res.headers, body };
+    }
+    function contentsPath(slug, cfg){
+      cfg = cfg || getRepoSettings();
+      const dir = cfg.dataPath ? cfg.dataPath.split('/').map(enc).join('/') : '';
+      let p = '/repos/' + enc(cfg.owner) + '/' + enc(cfg.repo) + '/contents';
+      if(dir) p += '/' + dir;
+      if(slug) p += '/' + enc(slug) + '.json';
+      return p;
+    }
+
+    // ----- state -----
+    let snapshot = readJSON(SNAPSHOT_KEY, {});   // { slug: { sha, body } } as last seen in the repo
+    function saveSnapshot(){ localStorage.setItem(SNAPSHOT_KEY, JSON.stringify(snapshot)); }
+    let dirEtag = null;
+    let writeTimer = null;
+    let flushing = false, flushAgain = false;
+    const syncState = { status:'local', detail:'', conflicts:{} };
+
+    // ----- sync indicator -----
+    const syncArea = document.getElementById('syncArea');
+    const syncStatusEl = document.getElementById('syncStatus');
+    const refreshBtn = document.getElementById('refreshBtn');
+    const settingsBtn = document.getElementById('settingsBtn');
+    const syncNowBtn = document.getElementById('syncNowBtn');
+    const resetBtn = document.getElementById('resetBtn');
+
+    function setSync(status, detail){
+      syncState.status = status; syncState.detail = detail || '';
+      const labels = {
+        local:        ['', ''],
+        notconnected: ['Not connected, click to set up', 'warn'],
+        loading:      ['Loading from repository…', ''],
+        synced:       ['Synced ' + timeNow(), 'ok'],
+        pending:      ['Changes not yet saved', 'warn'],
+        saving:       ['Saving…', ''],
+        offline:      ['Offline, changes kept locally', 'warn'],
+        conflict:     ['Conflict, click to resolve', 'err'],
+        readonly:     ['Read-only access, changes kept locally', 'warn'],
+        badtoken:     ['Token rejected, click to set up', 'err'],
+        ratelimited:  ['Rate limited, will retry', 'warn'],
+        error:        ['Error, click to retry', 'err']
+      };
+      const [label, cls] = labels[status] || [status, ''];
+      syncStatusEl.textContent = label;
+      syncStatusEl.className = 'sync-status' + (cls ? ' ' + cls : '');
+      syncStatusEl.title = detail || label;
+    }
+
+    // ----- persist: the single write path used by every edit -----
+    function persist(data){
+      currentData = data;
+      const pretty = JSON.stringify(data, null, 2);
+      localStorage.setItem(STORAGE_KEY, pretty);
+      if(!remoteMode()) return;
+      localStorage.setItem(DIRTY_KEY, '1');
+      setSync('pending');
+      clearTimeout(writeTimer);
+      writeTimer = setTimeout(() => { flush(); }, WRITE_DEBOUNCE_MS);
+    }
+
+    function groupBySlug(tasks){
+      const map = new Map();
+      (Array.isArray(tasks) ? tasks : []).forEach(t => {
+        if(!t || typeof t !== 'object') return;
+        const s = personSlug(t.person);
+        if(!map.has(s)) map.set(s, []);
+        map.get(s).push(t);
+      });
+      return map;
+    }
+    function fileBody(tasks){ return JSON.stringify({ tasks }, null, 2) + '\n'; }
+
+    function handleWriteError(e){
+      if(e.status === 401) setSync('badtoken', e.message);
+      else if(e.status === 403 && e.headers && e.headers.get('x-ratelimit-remaining') === '0') setSync('ratelimited', e.message);
+      else if(e.status === 403 || e.status === 404) setSync('readonly', e.message);
+      else if(e.status === 0) setSync('offline', e.message);
+      else setSync('error', e.message);
+    }
+    function handleReadError(e){
+      if(e.status === 401) setSync('badtoken', e.message);
+      else if(e.status === 403 && e.headers && e.headers.get('x-ratelimit-remaining') === '0') setSync('ratelimited', e.message);
+      else if(e.status === 0) setSync('offline', e.message);
+      else setSync('error', e.message + ' (check Settings)');
+    }
+
+    // Write every changed person file, delete files for people with no tasks.
+    async function flush(opts){
+      opts = opts || {};
+      if(!remoteMode()) return;
+      if(flushing){ flushAgain = true; return; }
+      clearTimeout(writeTimer);
+      flushing = true;
+      setSync('saving');
+      let data;
+      try{ data = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{"tasks":[]}'); }
+      catch(e){ data = currentData || { tasks: [] }; }
+      const groups = groupBySlug(data.tasks);
+      const cfg = getRepoSettings();
+      let failed = false, conflict = false;
+
+      for(const [slug, tasks] of groups){
+        if(syncState.conflicts[slug]){ conflict = true; continue; }
+        const body = fileBody(tasks);
+        const prev = snapshot[slug];
+        if(prev && prev.body === body) continue;
+        try{
+          const payload = { message: 'Update tasks for ' + slug, content: b64(body), branch: cfg.branch };
+          if(prev && prev.sha) payload.sha = prev.sha;
+          const r = await api(contentsPath(slug, cfg), { method:'PUT', body: payload, keepalive: !!opts.keepalive });
+          snapshot[slug] = { sha: r.body.content.sha, body };
+          saveSnapshot();
+        }catch(e){
+          if(e.status === 409 || e.status === 422){
+            try{ await recordConflict(slug, body); conflict = true; }
+            catch(e2){ failed = true; handleWriteError(e2); break; }
+          } else { failed = true; handleWriteError(e); break; }
+        }
+      }
+      if(!failed){
+        for(const slug of Object.keys(snapshot)){
+          if(groups.has(slug)) continue;
+          if(syncState.conflicts[slug]){ conflict = true; continue; }
+          try{
+            await api(contentsPath(slug, cfg), { method:'DELETE', body: { message: 'Remove tasks for ' + slug, sha: snapshot[slug].sha, branch: cfg.branch }, keepalive: !!opts.keepalive });
+            delete snapshot[slug]; saveSnapshot();
+          }catch(e){
+            if(e.status === 409 || e.status === 422){
+              try{ await recordConflict(slug, null); conflict = true; }
+              catch(e2){ failed = true; handleWriteError(e2); break; }
+            } else if(e.status === 404){ delete snapshot[slug]; saveSnapshot(); }
+            else { failed = true; handleWriteError(e); break; }
+          }
+        }
+      }
+      flushing = false;
+      if(flushAgain){ flushAgain = false; return flush(opts); }
+      if(failed) return;                 // indicator already set
+      if(conflict){ setSync('conflict'); return; }
+      localStorage.removeItem(DIRTY_KEY);
+      setSync('synced');
+    }
+
+    // Read the directory listing, fetch only files whose blob sha changed, rebuild the task list.
+    // Returns true if anything changed.
+    async function loadFromRepo(){
+      const cfg = getRepoSettings();
+      const headers = {};
+      if(dirEtag) headers['If-None-Match'] = dirEtag;
+      let listing;
+      try{
+        listing = await api(contentsPath('', cfg) + '?ref=' + enc(cfg.branch), { headers });
+      }catch(e){
+        if(e.status === 404 && Object.keys(snapshot).length === 0 && await repoExists(cfg)){
+          listing = { status: 200, headers: new Headers(), body: [] }; // data directory not created yet
+        } else throw e;
+      }
+      if(listing.status === 304) return false;
+      dirEtag = listing.headers.get('ETag');
+      const files = (Array.isArray(listing.body) ? listing.body : []).filter(f => f.type === 'file' && /\.json$/i.test(f.name));
+      const newSnapshot = {};
+      const tasks = [];
+      let changed = false;
+      for(const f of files){
+        const slug = f.name.replace(/\.json$/i,'');
+        const prev = snapshot[slug];
+        let body;
+        if(prev && prev.sha === f.sha && typeof prev.body === 'string'){ body = prev.body; }
+        else {
+          const r = await api(contentsPath(slug, cfg) + '?ref=' + enc(cfg.branch), { headers: { 'Accept': 'application/vnd.github.raw+json' }, raw: true });
+          body = r.body; changed = true;
+        }
+        newSnapshot[slug] = { sha: f.sha, body };
+        let parsed;
+        try{ parsed = JSON.parse(body); }catch(e){ console.warn('Skipping invalid JSON in', f.name); continue; }
+        const arr = Array.isArray(parsed) ? parsed : (parsed && Array.isArray(parsed.tasks) ? parsed.tasks : []);
+        arr.forEach(t => { if(t && typeof t === 'object'){ if(!t.person) t.person = slug; tasks.push(t); } });
+      }
+      if(Object.keys(snapshot).some(s => !newSnapshot[s])) changed = true;
+      snapshot = newSnapshot; saveSnapshot();
+      sortTasksArray(tasks);
+      const pretty = JSON.stringify({ tasks }, null, 2);
+      if(pretty !== textarea.value){
+        textarea.value = pretty;
+        localStorage.setItem(STORAGE_KEY, pretty);
+        renderFromTextarea(true);
+      }
+      return changed;
+    }
+    async function repoExists(cfg){
+      try{ await api('/repos/' + enc(cfg.owner) + '/' + enc(cfg.repo), { cfg }); return true; }
+      catch(e){ return false; }
+    }
+
+    function modalOpen(){ return !!document.querySelector('.modal-backdrop:not(.modal-hidden)'); }
+    function textareaHasUnsavedEdits(){ return textarea.value !== (localStorage.getItem(STORAGE_KEY) || ''); }
+
+    // Flush pending writes, then reload. Skips the reload while the user is mid-edit.
+    async function poll(reason){
+      if(!remoteMode()) return;
+      if(modalOpen() && reason !== 'startup') return;
+      if(localStorage.getItem(DIRTY_KEY)){
+        await flush();
+        if(localStorage.getItem(DIRTY_KEY)) return;   // still dirty: failed or in conflict
+      }
+      if(textareaHasUnsavedEdits() && reason !== 'startup') return;
+      try{
+        if(reason === 'startup' || reason === 'manual') setSync('loading');
+        await loadFromRepo();
+        setSync('synced');
+      }catch(e){ handleReadError(e); }
+    }
+
+    // ----- conflicts -----
+    async function recordConflict(slug, mineBody){
+      const cfg = getRepoSettings();
+      let theirs = null, sha = null;
+      try{
+        const r = await api(contentsPath(slug, cfg) + '?ref=' + enc(cfg.branch));
+        sha = r.body.sha; theirs = unb64(r.body.content);
+      }catch(e){ if(e.status !== 404) throw e; }
+      syncState.conflicts[slug] = { mine: mineBody, theirs, sha };
+    }
+
+    const conflictModal = document.getElementById('conflictModal');
+    const conflictIntro = document.getElementById('conflictIntro');
+    const conflictMine = document.getElementById('conflictMine');
+    const conflictTheirs = document.getElementById('conflictTheirs');
+    let conflictSlug = null;
+
+    function openConflictModal(){
+      const slugs = Object.keys(syncState.conflicts);
+      if(!slugs.length){ setSync('pending'); flush(); return; }
+      conflictSlug = slugs[0];
+      const c = syncState.conflicts[conflictSlug];
+      conflictIntro.textContent = 'The repository file for "' + conflictSlug + '" changed while you had local changes to it.'
+        + (slugs.length > 1 ? ' (' + (slugs.length - 1) + ' more after this one.)' : '');
+      conflictMine.value = c.mine === null ? '(you removed all tasks for this person)' : c.mine;
+      conflictTheirs.value = c.theirs === null ? '(file no longer exists in the repository)' : c.theirs;
+      conflictModal.classList.remove('modal-hidden');
+    }
+    function closeConflictModal(){ conflictModal.classList.add('modal-hidden'); conflictSlug = null; }
+
+    document.getElementById('conflictKeepMine').addEventListener('click', () => {
+      const c = syncState.conflicts[conflictSlug]; if(!c) return closeConflictModal();
+      if(c.sha) snapshot[conflictSlug] = { sha: c.sha, body: c.theirs };
+      else delete snapshot[conflictSlug];
+      saveSnapshot();
+      delete syncState.conflicts[conflictSlug];
+      closeConflictModal();
+      flush().then(() => { if(Object.keys(syncState.conflicts).length) openConflictModal(); });
+    });
+    document.getElementById('conflictKeepTheirs').addEventListener('click', () => {
+      const c = syncState.conflicts[conflictSlug]; if(!c) return closeConflictModal();
+      let data;
+      try{ data = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{"tasks":[]}'); }catch(e){ data = currentData || { tasks: [] }; }
+      data.tasks = (data.tasks || []).filter(t => personSlug(t && t.person) !== conflictSlug);
+      if(c.theirs !== null){
+        let parsed = null; try{ parsed = JSON.parse(c.theirs); }catch(e){}
+        const arr = Array.isArray(parsed) ? parsed : (parsed && Array.isArray(parsed.tasks) ? parsed.tasks : []);
+        arr.forEach(t => { if(t && typeof t === 'object'){ if(!t.person) t.person = conflictSlug; data.tasks.push(t); } });
+        snapshot[conflictSlug] = { sha: c.sha, body: c.theirs };
+      } else {
+        delete snapshot[conflictSlug];
+      }
+      saveSnapshot();
+      delete syncState.conflicts[conflictSlug];
+      sortTasksArray(data.tasks);
+      const pretty = JSON.stringify(data, null, 2);
+      textarea.value = pretty;
+      currentData = data;
+      localStorage.setItem(STORAGE_KEY, pretty);
+      renderFromTextarea(true);
+      closeConflictModal();
+      flush().then(() => { if(Object.keys(syncState.conflicts).length) openConflictModal(); });
+    });
+    document.getElementById('conflictLater').addEventListener('click', () => { closeConflictModal(); setSync('conflict'); });
+
+    // ----- settings modal -----
+    const settingsModal = document.getElementById('settingsModal');
+    const settingsForm = document.getElementById('settingsForm');
+    const settingsError = document.getElementById('settingsError');
+    const settingsInfo = document.getElementById('settingsInfo');
+    const stApiBase = document.getElementById('stApiBase');
+    const stOwner = document.getElementById('stOwner');
+    const stRepo = document.getElementById('stRepo');
+    const stBranch = document.getElementById('stBranch');
+    const stDataPath = document.getElementById('stDataPath');
+    const stToken = document.getElementById('stToken');
+
+    function settingsFromForm(){
+      return {
+        apiBase: stApiBase.value.trim().replace(/\/+$/,'') || 'https://api.github.com',
+        owner: stOwner.value.trim(),
+        repo: stRepo.value.trim(),
+        branch: stBranch.value.trim() || 'main',
+        dataPath: stDataPath.value.trim().replace(/^\/+|\/+$/g,'')
+      };
+    }
+    function openSettingsModal(hint){
+      const cfg = getRepoSettings();
+      stApiBase.value = cfg.apiBase; stOwner.value = cfg.owner; stRepo.value = cfg.repo;
+      stBranch.value = cfg.branch; stDataPath.value = cfg.dataPath; stToken.value = getToken();
+      settingsError.textContent = ''; settingsInfo.textContent = hint || '';
+      settingsModal.classList.remove('modal-hidden');
+      (getToken() ? stOwner : stToken).focus();
+    }
+    function closeSettingsModal(){ settingsModal.classList.add('modal-hidden'); }
+
+    async function testConnection(cfg, token){
+      if(!repoConfigured(cfg)) throw new Error('Owner and repository are required.');
+      if(!token) throw new Error('A token is required.');
+      const user = await api('/user', { cfg, token });
+      const repo = await api('/repos/' + enc(cfg.owner) + '/' + enc(cfg.repo), { cfg, token });
+      const canWrite = !!(repo.body && repo.body.permissions && repo.body.permissions.push);
+      let people = 0;
+      try{
+        const listing = await api(contentsPath('', cfg) + '?ref=' + enc(cfg.branch), { cfg, token });
+        people = (Array.isArray(listing.body) ? listing.body : []).filter(f => f.type === 'file' && /\.json$/i.test(f.name)).length;
+      }catch(e){ if(e.status !== 404) throw e; }
+      return 'Connected as ' + (user.body && user.body.login) + ', ' + people + ' ' + (people === 1 ? 'person' : 'people') + ' found, '
+        + (canWrite ? 'write access.' : 'READ-ONLY access (you can view but not save).');
+    }
+
+    document.getElementById('settingsTestBtn').addEventListener('click', async () => {
+      settingsError.textContent = ''; settingsInfo.textContent = 'Testing…';
+      try{ settingsInfo.textContent = await testConnection(settingsFromForm(), stToken.value.trim()); }
+      catch(e){ settingsInfo.textContent = ''; settingsError.textContent = e.status === 401 ? 'Token rejected.' : (e.status === 404 ? 'Repository not found (or the token cannot see it).' : e.message); }
+    });
+    settingsForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const cfg = settingsFromForm();
+      if(!repoConfigured(cfg)){ settingsError.textContent = 'Owner and repository are required.'; return; }
+      localStorage.setItem(SETTINGS_KEY, JSON.stringify(cfg));
+      const token = stToken.value.trim();
+      if(token) localStorage.setItem(TOKEN_KEY, token); else localStorage.removeItem(TOKEN_KEY);
+      localStorage.removeItem(SNAPSHOT_KEY);     // different repo or token: start from a clean read
+      location.reload();
+    });
+    document.getElementById('settingsForgetBtn').addEventListener('click', () => {
+      localStorage.removeItem(TOKEN_KEY);
+      localStorage.removeItem(SNAPSHOT_KEY);
+      localStorage.removeItem(DIRTY_KEY);
+      location.reload();
+    });
+    document.getElementById('settingsCancelBtn').addEventListener('click', closeSettingsModal);
+    settingsBtn.addEventListener('click', () => openSettingsModal());
+
+    syncStatusEl.addEventListener('click', () => {
+      const s = syncState.status;
+      if(s === 'conflict') openConflictModal();
+      else if(s === 'notconnected' || s === 'badtoken') openSettingsModal();
+      else if(s === 'readonly') openSettingsModal('This token can read the repository but not write to it. Your changes are kept in this browser only.');
+      else if(s === 'offline' || s === 'error' || s === 'ratelimited') poll('manual');
+      else poll('manual');
+    });
+    refreshBtn.addEventListener('click', () => poll('manual'));
+    syncNowBtn.addEventListener('click', async () => { await flush(); if(!localStorage.getItem(DIRTY_KEY)) poll('manual'); });
+
+    // Try to get the last debounced write out before the tab closes. The
+    // outbox in localStorage covers the case where this does not finish.
+    window.addEventListener('beforeunload', () => {
+      if(remoteMode() && localStorage.getItem(DIRTY_KEY) && !flushing) flush({ keepalive: true });
+    });
+
+    // One-time offer to upload tasks that only exist in this browser.
+    function maybeOfferMigration(legacyRaw){
+      if(localStorage.getItem(INIT_KEY)) return;
+      localStorage.setItem(INIT_KEY, '1');
+      let legacy; try{ legacy = legacyRaw ? JSON.parse(legacyRaw) : null; }catch(e){ return; }
+      if(!legacy || !Array.isArray(legacy.tasks) || !legacy.tasks.length) return;
+      if(legacyRaw === defaultExample) return;
+      const groups = groupBySlug(legacy.tasks);
+      const missing = Array.from(groups.keys()).filter(s => !snapshot[s]);
+      if(!missing.length) return;
+      const ok = confirm('This browser has tasks for ' + missing.join(', ') + ' that are not in the shared repository yet.\n\nUpload them to the repository?');
+      if(!ok) return;
+      let data; try{ data = JSON.parse(textarea.value); }catch(e){ data = { tasks: [] }; }
+      if(!Array.isArray(data.tasks)) data.tasks = [];
+      missing.forEach(s => groups.get(s).forEach(t => data.tasks.push(t)));
+      sortTasksArray(data.tasks);
+      textarea.value = JSON.stringify(data, null, 2);
+      persist(data);
+      renderFromTextarea(true);
+    }
+
+    // ----- start-up -----
+    function initStorage(){
+      const saved = localStorage.getItem(STORAGE_KEY);
+      const configured = repoConfigured() || location.hash === '#settings';
+      if(!configured){
+        // Local-only mode: identical to the original app.
+        textarea.value = saved ? saved : defaultExample;
+        renderFromTextarea(true);
+        return;
+      }
+      syncArea.style.display = '';
+      syncNowBtn.style.display = '';
+      resetBtn.style.display = 'none';   // would wipe the shared plan; not offered in shared mode
+      textarea.value = saved ? saved : JSON.stringify({ tasks: [] }, null, 2);
+      renderFromTextarea(true);
+      if(!remoteMode()){
+        setSync('notconnected');
+        openSettingsModal('Paste a token to connect to the shared repository.');
+        return;
+      }
+      setSync('loading');
+      poll('startup').then(() => maybeOfferMigration(saved));
+      setInterval(() => poll('timer'), POLL_MS);
+      document.addEventListener('visibilitychange', () => { if(document.visibilityState === 'visible') poll('focus'); });
+      window.addEventListener('online', () => poll('online'));
+    }
+    initStorage();
+
+  })();
+  </script>
+</body>
+</html>

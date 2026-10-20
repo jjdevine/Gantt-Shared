@@ -1,0 +1,13 @@
+{
+  "name": "gantt-shared",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Gantt task planner with state shared through a GitHub repository",
+  "type": "module",
+  "scripts": {
+    "test": "node test/harness.mjs"
+  },
+  "devDependencies": {
+    "jsdom": "^25.0.1"
+  }
+}
