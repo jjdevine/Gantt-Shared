@@ -1,0 +1,43 @@
+{
+  "tasks": [
+    {
+      "person": "Ana O'Brien-Smith",
+      "task": "Weird type",
+      "workItemType": "Other",
+      "description": "",
+      "start": "2026-10-01",
+      "end": "",
+      "durationWeeks": 3,
+      "capacityImpact": "high",
+      "utilisationPercent": 100,
+      "complete": true,
+      "milestones": {}
+    },
+    {
+      "person": "Ana O'Brien-Smith",
+      "task": "Bad duration",
+      "workItemType": "Feature",
+      "description": "",
+      "start": "2026-10-01",
+      "end": "",
+      "durationWeeks": null,
+      "capacityImpact": "banana",
+      "utilisationPercent": 0,
+      "complete": false,
+      "milestones": {}
+    },
+    {
+      "person": "Ana O'Brien-Smith",
+      "task": "Missing almost everything",
+      "workItemType": "Other",
+      "description": "",
+      "start": "",
+      "end": "",
+      "durationWeeks": null,
+      "capacityImpact": "medium",
+      "utilisationPercent": null,
+      "complete": false,
+      "milestones": {}
+    }
+  ]
+}
