@@ -1,0 +1,45 @@
+{
+  "tasks": [
+    {
+      "person": "Marcus",
+      "task": "Security audit follow-ups",
+      "workItemType": "Improvement",
+      "description": "",
+      "start": "2026-11-09",
+      "end": "2026-12-04",
+      "durationWeeks": null,
+      "capacityImpact": "high",
+      "utilisationPercent": 40,
+      "complete": false,
+      "milestones": {}
+    },
+    {
+      "person": "Marcus",
+      "task": "Vendor review",
+      "workItemType": "Feature",
+      "description": "",
+      "start": "2026-10-12",
+      "end": "",
+      "durationWeeks": 4,
+      "capacityImpact": "medium",
+      "utilisationPercent": 50,
+      "complete": false,
+      "milestones": {}
+    },
+    {
+      "person": "Marcus",
+      "task": "Hiring loop",
+      "workItemType": "Other",
+      "description": "",
+      "start": "2026-10-19",
+      "end": "",
+      "durationWeeks": 6,
+      "capacityImpact": "low",
+      "utilisationPercent": 15,
+      "complete": false,
+      "milestones": {
+        "offer out": "2026-11-20"
+      }
+    }
+  ]
+}
